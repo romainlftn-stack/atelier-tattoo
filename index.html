@@ -218,9 +218,36 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 #ldmsg code{background:var(--elev1);padding:2px 6px;border-radius:4px;color:var(--txt);display:inline-block;margin-top:4px}
 
 /* ---------- MODAL HELP ---------- */
-#help{position:fixed;inset:0;background:var(--veil);backdrop-filter:blur(6px);z-index:60;
+#help,#authModal,#promptModal{position:fixed;inset:0;background:var(--veil);backdrop-filter:blur(6px);z-index:60;
   display:none;place-items:center}
-#help.show{display:grid}
+#help.show,#authModal.show,#promptModal.show{display:grid}
+#authModal .hbox,#promptModal .hbox{width:min(360px,92vw);padding:22px 24px}
+#authModal .row.wide,#promptModal .row.wide{grid-template-columns:1fr;gap:4px;margin-top:10px}
+#authModal .row.wide label{font-size:11px;color:var(--txt3)}
+#authModal input,#promptModal input{background:var(--pan2);border:1px solid var(--line);
+  border-radius:7px;padding:8px 10px;color:var(--txt);font:inherit;width:100%}
+#authErreur:empty,#promptErreur:empty{display:none}
+#compteZone{position:relative}
+#btnCompte.connecte{background:var(--acc);border-color:var(--acc);color:#fff}
+#menuCompte{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);
+  border:1px solid var(--line);border-radius:9px;min-width:190px;padding:6px;
+  box-shadow:0 14px 34px var(--shadow);z-index:70;display:none}
+#menuCompte.show{display:block}
+#menuCompte .nom{padding:8px 10px;font-size:12px;color:var(--txt3);border-bottom:1px solid var(--line);margin-bottom:4px}
+#menuCompte button{display:block;width:100%;text-align:left;background:none;border:none;
+  color:var(--txt);font:inherit;font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer}
+#menuCompte button:hover{background:var(--pan2)}
+#dossierConfigs{margin-top:8px}
+#configsToggle{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txt2);
+  cursor:pointer;padding:6px 2px;user-select:none}
+#configsToggle .chev{transition:transform .15s;font-size:9px}
+#configsToggle.open .chev{transform:rotate(90deg)}
+#configsList{padding:2px 0 0 4px}
+.config-item{display:flex;align-items:center;gap:8px;padding:6px 6px;border-radius:6px;font-size:12px}
+.config-item:hover{background:var(--pan2)}
+.config-item .nom{flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.config-item .sup{opacity:.5;cursor:pointer;font-size:13px;padding:2px 5px}
+.config-item .sup:hover{opacity:1;color:#e8503a}
 .hbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(700px,92vw);
   max-height:84vh;overflow-y:auto;padding:24px 28px;box-shadow:0 24px 70px var(--shadow)}
 .hbox h2{font-size:16px;margin-bottom:4px;font-weight:600}
@@ -330,6 +357,14 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <button class="tb" id="btnLoad" title="Charger un projet">Charger</button>
     <button class="tb" id="btnTheme" title="Thème clair / sombre">☾</button>
     <button class="tb" id="btnHelp" title="Aide (?)">?</button>
+    <div id="compteZone">
+      <button class="tb" id="btnCompte" title="Se connecter">Se connecter</button>
+      <div id="menuCompte">
+        <div class="nom" id="menuCompteNom">—</div>
+        <button id="btnChangerMdp">Changer le mot de passe</button>
+        <button id="btnDeconnecter">Se déconnecter</button>
+      </div>
+    </div>
     <button class="tb" id="btnFull" title="Plein écran (F)">⛶</button>
   </div>
 
@@ -389,6 +424,12 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
           <button class="btn" id="btnDup" title="Dupliquer (D)">Dupliquer</button>
           <button class="btn" id="btnMirror" title="Symétrie (M)">Symétrie</button>
           <button class="btn dgr" id="btnDel" title="Supprimer (Suppr)">Supprimer</button>
+        </div>
+        <div class="sep"></div>
+        <button class="btn" id="btnEnregistrerConfig">Enregistrer cette configuration</button>
+        <div id="dossierConfigs" style="display:none">
+          <div id="configsToggle"><span class="chev">▶</span> Mes configurations <span class="cnt" id="cntConfigs">0</span></div>
+          <div id="configsList" style="display:none"></div>
         </div>
       </div>
     </div>
@@ -609,7 +650,8 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <b>Glisser un calque</b><span>Le déplacer sur la peau, il épouse le relief</span>
     <b>Alt + glisser</b><span>Faire pivoter le calque</span>
     <b>Maj + glisser</b><span>Redimensionner le calque</span>
-    <b>D / M / Suppr</b><span>Dupliquer · Symétriser · Supprimer</span>
+    <b>D / Suppr</b><span>Dupliquer · Supprimer (symétrie : icône ⇄ sur le calque)</span>
+     <b>M / V</b><span>Naviguer · Placer</span>
     <b>Cmd/Ctrl + Z</b><span>Annuler · Maj pour rétablir</span>
   </div>
   <h4>Détourage automatique</h4>
@@ -617,6 +659,30 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <h4>Éclairage</h4>
   <p>Chaque source est positionnable en azimut / hauteur / distance, ou directement à la souris via le manipulateur 3D. La lumière marquée « principale » alimente la diffusion sous-cutanée de la peau.</p>
   <button class="btn pri" id="btnCloseHelp">Fermer</button>
+</div></div>
+<div id="authModal"><div class="hbox">
+  <h2 id="authTitre">Se connecter</h2>
+  <p style="color:var(--txt3)" id="authSous">Retrouvez vos tatouages enregistrés sur n'importe quel appareil.</p>
+  <div class="row wide"><label>Email</label><input type="email" id="authEmail" autocomplete="username"></div>
+  <div class="row wide"><label>Mot de passe</label><input type="password" id="authPass" autocomplete="current-password"></div>
+  <div class="row wide" id="rowAuthPass2" style="display:none"><label>Confirmer</label><input type="password" id="authPass2" autocomplete="new-password"></div>
+  <div class="hint" id="authErreur" style="color:#e8503a"></div>
+  <div class="btnrow" style="margin-top:14px">
+    <button class="btn pri" id="btnAuthValider">Se connecter</button>
+    <button class="btn" id="btnAuthFermer">Annuler</button>
+  </div>
+  <p style="margin-top:12px;font-size:12px">
+    <a href="#" id="lienAuthBascule" style="color:var(--acc)">Pas encore de compte ? Créez-en un.</a>
+  </p>
+</div></div>
+<div id="promptModal"><div class="hbox">
+  <h2 id="promptTitre">Nom de la configuration</h2>
+  <div class="row wide"><input type="text" id="promptChamp" placeholder="ex. Bras droit — projet manchette"></div>
+  <div class="hint" id="promptErreur" style="color:#e8503a"></div>
+  <div class="btnrow" style="margin-top:14px">
+    <button class="btn pri" id="btnPromptValider">Enregistrer</button>
+    <button class="btn" id="btnPromptFermer">Annuler</button>
+  </div>
 </div></div>
 
 <script type="importmap">
@@ -648,7 +714,6 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
 /* =====================================================================
    0 · UTILITAIRES
    ===================================================================== */
@@ -3906,6 +3971,192 @@ $('btnShot').addEventListener('click',()=>{
   toast('Rendu exporté en '+(w*s)+'×'+(h*s));
 });
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+/* =====================================================================
+   Compte & sauvegarde cloud (Supabase)
+   ---------------------------------------------------------------------
+   Réutilise exactement la même charge utile que la sauvegarde locale
+   (bouton « Sauver », voir plus bas) — un enregistrement cloud n'est que
+   ce même objet JSON déposé dans une ligne, plutôt que téléchargé en
+   fichier. Aucune clé secrète ici : la clé publiable est faite pour
+   vivre côté client, la sécurité vient des règles RLS côté serveur.
+   ===================================================================== */
+const SUPABASE_URL='https://xbzawuxpcsaublrzwcpy.supabase.co';
+const SUPABASE_ANON='sb_publishable_yJXk7hqaof-6IrKNZGw2ew_NBOBKxRZ';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+let session=null, authMode='login';
+
+function traduireErreurAuth(msg){
+  const table={
+    'Invalid login credentials':'Email ou mot de passe incorrect.',
+    'Email not confirmed':'Confirmez votre adresse email avant de vous connecter — vérifiez votre boîte mail.',
+    'User already registered':'Un compte existe déjà avec cet email.',
+    'Password should be at least 6 characters.':'Le mot de passe doit contenir au moins 6 caractères.',
+  };
+  return table[msg] || msg;
+}
+function nomAffiche(){
+  if(!session) return null;
+  return session.user.user_metadata?.display_name || session.user.email.split('@')[0];
+}
+function majBadgeCompte(){
+  const b=$('btnCompte');
+  if(session){ b.textContent=nomAffiche(); b.classList.add('connecte'); b.title='Compte'; $('menuCompteNom').textContent=session.user.email; }
+  else { b.textContent='Se connecter'; b.classList.remove('connecte'); b.title='Se connecter'; $('menuCompte').classList.remove('show'); }
+  majDossierConfigs();
+}
+async function initAuth(){
+  const { data:{ session:s } } = await sb.auth.getSession();
+  session=s; majBadgeCompte();
+  sb.auth.onAuthStateChange((_evt, s2)=>{ session=s2; majBadgeCompte(); });
+}
+initAuth();
+
+function ouvrirAuth(mode){
+  authMode=mode;
+  $('authTitre').textContent = mode==='login' ? 'Se connecter' : 'Créer un compte';
+  $('authSous').textContent = mode==='login'
+    ? 'Retrouvez vos tatouages enregistrés sur n\'importe quel appareil.'
+    : 'Un email de confirmation vous sera envoyé.';
+  $('rowAuthPass2').style.display = mode==='login' ? 'none' : '';
+  $('btnAuthValider').textContent = mode==='login' ? 'Se connecter' : 'Créer le compte';
+  $('lienAuthBascule').textContent = mode==='login' ? 'Pas encore de compte ? Créez-en un.' : 'Déjà un compte ? Connectez-vous.';
+  $('authErreur').textContent='';
+  $('authPass').value=''; $('authPass2').value='';
+  $('authModal').classList.add('show');
+  $('authEmail').focus();
+}
+$('lienAuthBascule').addEventListener('click',e=>{ e.preventDefault(); ouvrirAuth(authMode==='login'?'signup':'login'); });
+$('btnAuthFermer').addEventListener('click',()=>$('authModal').classList.remove('show'));
+$('authModal').addEventListener('click',e=>{ if(e.target.id==='authModal') $('authModal').classList.remove('show'); });
+$('btnAuthValider').addEventListener('click', async ()=>{
+  const email=$('authEmail').value.trim(), pass=$('authPass').value;
+  $('authErreur').textContent='';
+  if(!email || !pass){ $('authErreur').textContent='Email et mot de passe requis.'; return; }
+  if(authMode==='signup'){
+    if(pass.length<6){ $('authErreur').textContent='6 caractères minimum.'; return; }
+    if(pass!==$('authPass2').value){ $('authErreur').textContent='Les mots de passe ne correspondent pas.'; return; }
+    const { error } = await sb.auth.signUp({ email, password:pass, options:{ data:{ display_name: email.split('@')[0] } } });
+    if(error){ $('authErreur').textContent=traduireErreurAuth(error.message); return; }
+    $('authModal').classList.remove('show');
+    toast('Compte créé — vérifiez votre boîte mail pour confirmer, puis connectez-vous.');
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+    if(error){ $('authErreur').textContent = traduireErreurAuth(error.message); return; }
+    $('authModal').classList.remove('show');
+    toast('Connecté — '+nomAffiche());
+  }
+});
+$('btnCompte').addEventListener('click',()=>{
+  if(!session){ ouvrirAuth('login'); return; }
+  $('menuCompte').classList.toggle('show');
+});
+document.addEventListener('click',e=>{
+  if(!$('compteZone').contains(e.target)) $('menuCompte').classList.remove('show');
+});
+$('btnDeconnecter').addEventListener('click', async ()=>{
+  await sb.auth.signOut(); $('menuCompte').classList.remove('show'); toast('Déconnecté');
+});
+$('btnChangerMdp').addEventListener('click',()=>{
+  $('menuCompte').classList.remove('show');
+  ouvrirPrompt('Nouveau mot de passe (6 caractères min.)', '', async (val)=>{
+    if(!val || val.length<6) return 'Au moins 6 caractères.';
+    const { error } = await sb.auth.updateUser({ password: val });
+    if(error) return error.message;
+    toast('Mot de passe modifié'); return null;
+  }, true);
+});
+
+/* ---- petite invite générique (nom de config, nouveau mot de passe…) ---- */
+let _promptCb=null;
+function ouvrirPrompt(titre, valeur, onValider, motDePasse){
+  $('promptTitre').textContent=titre;
+  $('promptChamp').type = motDePasse ? 'password' : 'text';
+  $('promptChamp').value=valeur||'';
+  $('promptErreur').textContent='';
+  _promptCb=onValider;
+  $('promptModal').classList.add('show');
+  $('promptChamp').focus();
+}
+$('btnPromptFermer').addEventListener('click',()=>$('promptModal').classList.remove('show'));
+$('promptModal').addEventListener('click',e=>{ if(e.target.id==='promptModal') $('promptModal').classList.remove('show'); });
+$('btnPromptValider').addEventListener('click', async ()=>{
+  if(!_promptCb) return;
+  const err = await _promptCb($('promptChamp').value.trim());
+  if(err){ $('promptErreur').textContent=err; return; }
+  $('promptModal').classList.remove('show');
+});
+$('promptChamp').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnPromptValider').click(); });
+
+/* ---- configurations enregistrées : même charge utile que « Sauver » ---- */
+function chargeUtileProjet(){
+  return {
+    v:1, kind:modelKind, corps:corpsActif,
+    model:['mGender','mHeight','mMuscle','mFat','mShoulder','mHips','mPose','mSide','mFist','mSpread','mTint','mGrain','mOil','mRedness','mVeins','mSSS']
+      .reduce((o,k)=>(o[k]=gv(k),o),{}),
+    tone:skinToneIdx,
+    theme:document.documentElement.getAttribute('data-theme')||'dark',
+    view:{fov:gv('vFov'), bg:$('gBg').value, exp:gv('gExp'), env:gv('gEnvInt'),
+      cam:camera.position.toArray(), tgt:controls.target.toArray()},
+    flashes:flashes.map(f=>({id:f.id,name:f.name,cut:f.cut,info:f.info,src:f.src.toDataURL('image/png')})),
+    layers:serializeLayers()
+  };
+}
+$('btnEnregistrerConfig').addEventListener('click',()=>{
+  if(!session){ ouvrirAuth('login'); toast('Connectez-vous pour enregistrer une configuration', true); return; }
+  if(!layers.length){ toast('Aucun calque à enregistrer', true); return; }
+  ouvrirPrompt('Nom de la configuration', '', async (nom)=>{
+    if(!nom) return 'Donnez un nom à cette configuration.';
+    const { error } = await sb.from('configurations').insert({
+      user_id: session.user.id, name: nom, data: chargeUtileProjet()
+    });
+    if(error) return error.message;
+    toast('Configuration « '+nom+' » enregistrée');
+    await majDossierConfigs();
+    return null;
+  });
+});
+
+let _configsCache=[];
+async function majDossierConfigs(){
+  const dossier=$('dossierConfigs');
+  if(!session){ dossier.style.display='none'; return; }
+  dossier.style.display='';
+  const { data, error } = await sb.from('configurations')
+    .select('id,name,created_at')
+    .eq('user_id', session.user.id)
+    .order('created_at', {ascending:false});
+  if(error){ return; }
+  _configsCache=data||[];
+  $('cntConfigs').textContent=_configsCache.length;
+  const liste=$('configsList');
+  liste.innerHTML='';
+  if(!_configsCache.length){ liste.innerHTML='<div class="hint" style="padding:6px">Aucune configuration enregistrée.</div>'; }
+  _configsCache.forEach(c=>{
+    const row=document.createElement('div'); row.className='config-item';
+    row.innerHTML='<span class="nom">'+c.name.replace(/</g,'&lt;')+'</span><span class="sup" title="Supprimer">✕</span>';
+    row.querySelector('.nom').addEventListener('click', async ()=>{
+      const { data:full, error:err2 } = await sb.from('configurations').select('data').eq('id',c.id).single();
+      if(err2){ toast('Chargement impossible', true); return; }
+      loadProject(full.data);
+      toast('Configuration « '+c.name+' » chargée');
+    });
+    row.querySelector('.sup').addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      if(!confirm('Supprimer « '+c.name+' » ?')) return;
+      await sb.from('configurations').delete().eq('id',c.id);
+      majDossierConfigs();
+    });
+    liste.appendChild(row);
+  });
+}
+$('configsToggle').addEventListener('click',()=>{
+  $('configsToggle').classList.toggle('open');
+  $('configsList').style.display = $('configsToggle').classList.contains('open') ? '' : 'none';
+});
+
+
 /* ---------- Projet : sauvegarde / chargement ---------- */
 $('btnSave').addEventListener('click',()=>{
   const data={
@@ -3999,6 +4250,7 @@ const CORPS = {
 };
 
 let corpsActif=null, mixer=null, clipCourant=null, horlogeAnim=new THREE.Clock();
+let osSuivi=null, osSuiviRef=null;
 let squelette=null, peauxSkinned=[], bindProxies=[], poseRepos=[];
 const texCache=new Map();
 
@@ -4154,7 +4406,7 @@ function majBoutonsAnim(nom){
 function jouerAnim(nom){
   if(!mixer) return;
   if(nom==='__stop'){
-    mixer.stopAllAction(); clipCourant=null;
+    mixer.stopAllAction(); clipCourant=null; osSuivi=null; osSuiviRef=null;
     poseRepos.forEach(([o,p,q,e])=>{ o.position.copy(p); o.quaternion.copy(q); o.scale.copy(e); });
     if(squelette) squelette.pose();
     peauxSkinned.forEach(sm=>sm.updateMatrixWorld(true));
@@ -4165,6 +4417,12 @@ function jouerAnim(nom){
   mixer.stopAllAction();
   mixer.clipAction(cl).reset().play();
   clipCourant=cl; majBoutonsAnim(nom);
+  // Repère de suivi : l'os du bassin, pour recentrer la caméra à chaque
+  // image pendant la lecture (voir tick()). Sans ça, la moindre dérive
+  // verticale résiduelle de l'animation fait sortir le corps du cadre.
+  osSuivi=null; osSuiviRef=null;
+  if(squelette) squelette.bones.forEach(b=>{ if(!osSuivi && /hips$/i.test(b.name)) osSuivi=b; });
+  if(osSuivi){ osSuivi.updateMatrixWorld(true); osSuiviRef=new THREE.Vector3().setFromMatrixPosition(osSuivi.matrixWorld); }
 }
 $$('#animBar button').forEach(b=>b.addEventListener('click',()=>jouerAnim(b.dataset.a)));
 let dernierCorps3D='male';
@@ -4311,7 +4569,18 @@ function tick(){
   const moved = controls.update();
   // Une animation en cours force le rendu : sans cela la boucle « à la demande »
   // figerait le personnage dès que la caméra ne bouge plus.
-  if(mixer && clipCourant){ mixer.update(horlogeAnim.getDelta()); dirty=true; }
+  if(mixer && clipCourant){
+    mixer.update(horlogeAnim.getDelta()); dirty=true;
+    if(osSuivi && osSuiviRef){
+      osSuivi.updateMatrixWorld(true);
+      const p=new THREE.Vector3().setFromMatrixPosition(osSuivi.matrixWorld);
+      const derive=p.clone().sub(osSuiviRef);
+      if(derive.lengthSq()>1e-8){
+        controls.target.add(derive); camera.position.add(derive);
+        osSuiviRef.copy(p);
+      }
+    }
+  }
   else if(horlogeAnim) horlogeAnim.getDelta();
   if(needRebuild && performance.now()-lastRebuild>26){
     lastRebuild=performance.now(); rebuildDecal(needRebuild); needRebuild=null; markDirty();

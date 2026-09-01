@@ -1,0 +1,13 @@
+# Fichiers sources bruts des personnages, avant conversion : très volumineux
+# (le modèle Male seul dépasse 300 Mo). Utile de les garder sur disque pour
+# retravailler un corps plus tard, mais jamais dans le dépôt.
+modeles-source/
+
+# Animations Mixamo déposées avant conversion en GLB, et les paquets
+# préparés pour l'upload — l'atelier n'a besoin que du résultat, dans corps/.
+animations/
+pour-mixamo/
+
+# Fichiers système
+.DS_Store
+node_modules/

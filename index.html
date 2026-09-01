@@ -8,7 +8,7 @@
 :root{
   --bg:#0c0d10; --panel:#15171c; --panel2:#1b1e25; --line:#282c36;
   --txt:#e6e8ee; --txt2:#98a0b0; --txt3:#646c7d;
-  --acc:#e8503a; --acc2:#ff7a5c; --ok:#3fb98a; --warn:#e0b341;
+  --acc:#5b7cfa; --acc2:#8fa6ff; --err:#e0574a; --ok:#3fb98a; --warn:#e0b341;
   --elev1:#1d2028; --elev2:#262a34; --sunk:#0f1115; --well:#0e1014;
   --row:#12151a; --rowh:#1a1e25; --rowon:#241a1c; --edge:#39404e;
   --track:#2c313c; --knob:#e6e8ee; --icoh:#2c313c;
@@ -54,14 +54,14 @@ button,input,select,textarea{font:inherit;color:inherit}
 .hid{display:none}
 
 /* ---------- TOPBAR ---------- */
-.logo{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:.3px;font-size:13px;white-space:nowrap}
-.logo b{color:var(--acc)}
-.logo .dot{width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc)}
+.logo{display:flex;align-items:center;gap:5px;font-weight:600;letter-spacing:1.6px;font-size:12px;white-space:nowrap}
+.logo b{color:var(--acc);font-weight:700}
+.logo .lg-dim{color:var(--txt2);font-weight:500}
 .seg{display:flex;background:var(--well);border:1px solid var(--line);border-radius:var(--r);padding:2px;gap:2px}
 .seg button{background:none;border:0;padding:5px 11px;border-radius:6px;color:var(--txt2);cursor:pointer;
   font-size:11.5px;font-weight:500;transition:.13s;white-space:nowrap}
 .seg button:hover{color:var(--txt);background:var(--elev2)}
-.seg button.on{background:var(--acc);color:#fff;box-shadow:0 1px 6px rgba(232,80,58,.4)}
+.seg button.on{background:var(--acc);color:#fff;box-shadow:0 1px 6px rgba(91,124,250,.4)}
 .spacer{flex:1}
 /* sélecteur à deux états, aligné sur les autres contrôles du panneau */
 .seg2{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;width:100%;
@@ -70,7 +70,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   cursor:pointer;font-size:11.5px;font-weight:500;transition:.13s;white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:5px}
 .seg2 button:hover{color:var(--txt);background:var(--elev2)}
-.seg2 button.on{background:var(--acc);color:#fff;box-shadow:0 1px 4px rgba(232,80,58,.32)}
+.seg2 button.on{background:var(--acc);color:#fff;box-shadow:0 1px 4px rgba(91,124,250,.32)}
 .seg2 button svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round}
 .tb{background:var(--elev1);border:1px solid var(--line);color:var(--txt2);padding:6px 11px;border-radius:var(--r);
@@ -145,7 +145,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     linear-gradient(45deg,var(--chk1) 25%,var(--chk2) 25%,var(--chk2) 75%,var(--chk1) 75%);
   background-size:9px 9px;background-position:0 0,4.5px 4.5px;transition:.13s}
 .gitem:hover{border-color:var(--edge);transform:translateY(-1px)}
-.gitem.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 3px 10px rgba(232,80,58,.28)}
+.gitem.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 3px 10px rgba(91,124,250,.28)}
 .gitem img{width:100%;height:100%;object-fit:contain;display:block}
 .gitem .x{position:absolute;top:1px;right:1px;width:15px;height:15px;background:rgba(0,0,0,.75);
   border-radius:4px;color:#fff;font-size:11px;line-height:15px;text-align:center;opacity:0;transition:.12s}
@@ -247,7 +247,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 .config-item:hover{background:var(--pan2)}
 .config-item .nom{flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .config-item .sup{opacity:.5;cursor:pointer;font-size:13px;padding:2px 5px}
-.config-item .sup:hover{opacity:1;color:#e8503a}
+.config-item .sup:hover{opacity:1;color:var(--err)}
 .hbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(700px,92vw);
   max-height:84vh;overflow-y:auto;padding:24px 28px;box-shadow:0 24px 70px var(--shadow)}
 .hbox h2{font-size:16px;margin-bottom:4px;font-weight:600}
@@ -260,15 +260,76 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 @media(max-width:1080px){:root{--pw:238px;--hdr:44px}
   .seg button{padding:5px 8px;font-size:11px}
   .row{grid-template-columns:70px 1fr 36px}}
-/* En dessous, la scène passe en plein écran et les panneaux glissent par-dessus. */
-/* Sous 900px les panneaux passent sous la scène et la page défile : sans
-   bascule pour les rappeler, ils ne doivent jamais devenir inatteignables. */
-@media(max-width:900px){
-  #app{grid-template-columns:1fr;grid-auto-rows:min-content;overflow:auto}
-  #stage{grid-column:1;grid-row:2;min-height:56vh}
-  .side{position:static;width:auto;border-left:none;border-right:none;
-        border-top:1px solid var(--bord)}
-  .side.left{grid-row:3} .side.right{grid-row:4}
+/* ---------- MOBILE (<=860px) ----------
+   Le modèle 3D occupe tout l'écran ; les panneaux deviennent des tiroirs
+   qui glissent par-dessus au lieu d'empiler la page verticalement.
+   Naviguer/Placer (#modeTabs, déjà dans le bandeau haut) devient la barre
+   du bas ; #modelTabs/#corpsSubTabs sont déplacés en JS dans #mobMenu
+   (voir script) pour rester de vrais boutons, pas une copie. */
+#mobMenuBtn,#mobBackdrop,#mobMenu,#fabAdd,#mobLayersBtn,#mobSettingsBtn{display:none}
+@media(max-width:860px){
+  html,body{overflow:hidden}
+  #app{grid-template-columns:1fr;grid-template-rows:var(--hdr) 1fr;height:100dvh}
+  #stage{grid-column:1;grid-row:2;width:100%;height:100%}
+  #topbar{gap:8px;padding:0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+  #topbar::-webkit-scrollbar{display:none}
+  #topbar .logo{font-size:10.5px;letter-spacing:1px}
+  #modeTabs{display:none}
+  #modelTabs,#corpsSubTabs{flex:none}
+
+  .side{position:fixed;top:var(--hdr);bottom:0;width:min(86vw,340px);z-index:70;
+        border:0;box-shadow:0 0 40px rgba(0,0,0,.5);
+        padding-bottom:calc(60px + env(safe-area-inset-bottom));
+        transition:transform .24s cubic-bezier(.2,.8,.3,1)}
+  .side.left{left:0;transform:translateX(-104%)}
+  .side.right{right:0;transform:translateX(104%)}
+  body.mob-left-open .side.left{transform:translateX(0)}
+  body.mob-right-open .side.right{transform:translateX(0)}
+
+  #mobBackdrop{display:none;position:fixed;inset:0;background:var(--veil);z-index:60;
+               -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  body.mob-left-open #mobBackdrop,body.mob-right-open #mobBackdrop,body.mob-menu-open #mobBackdrop{display:block}
+
+  #mobMenuBtn{display:flex;align-items:center;justify-content:center;
+    position:fixed;top:7px;right:8px;z-index:66;
+    width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
+    background:var(--elev1);color:var(--txt);font-size:15px}
+  #mobMenu{display:flex;flex-direction:column;gap:10px;position:fixed;left:8px;right:8px;
+    top:calc(var(--hdr) + 6px);z-index:65;background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px;padding:12px;
+    box-shadow:0 14px 40px rgba(0,0,0,.5);
+    transform:translateY(-14px) scale(.98);opacity:0;pointer-events:none;
+    transition:.18s}
+  body.mob-menu-open #mobMenu{transform:none;opacity:1;pointer-events:auto}
+  #mobMenu .mm-h{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt3)}
+  #mobMenu #modelTabs,#mobMenu #corpsSubTabs{width:100%}
+  #mobMenu #modelTabs button,#mobMenu #corpsSubTabs button{flex:1}
+  #mobMenu .mm-row{display:flex;gap:6px;flex-wrap:wrap}
+
+  #fabAdd,#mobLayersBtn,#mobSettingsBtn{
+    display:flex;align-items:center;justify-content:center;position:fixed;z-index:55;
+    right:12px;border-radius:50%;background:var(--acc);color:#fff;border:0;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer}
+  #fabAdd{width:52px;height:52px;font-size:26px;font-weight:300;
+    bottom:calc(66px + env(safe-area-inset-bottom))}
+  #mobLayersBtn,#mobSettingsBtn{width:40px;height:40px;background:var(--elev2);color:var(--txt)}
+  #mobLayersBtn svg,#mobSettingsBtn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7}
+  #mobLayersBtn{bottom:calc(126px + env(safe-area-inset-bottom))}
+  #mobSettingsBtn{bottom:calc(178px + env(safe-area-inset-bottom))}
+
+  /* barre du bas : Naviguer / Placer, réutilise #modeTabs déplacé ici en CSS pur */
+  body #modeTabs.mob-bar{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:56;
+    background:var(--panel2);border-top:1px solid var(--line);
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));gap:8px
+  }
+  body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:11px 0;font-size:12.5px}
+
+  #hud{bottom:calc(70px + env(safe-area-inset-bottom));max-width:60vw}
+  #hudTip{display:none} /* instructions souris, sans objet au toucher */
+  #viewbtns{top:8px;right:8px}
+  #animBar{bottom:calc(100px + env(safe-area-inset-bottom));max-width:calc(100% - 24px);
+    flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;justify-content:flex-start!important}
 }
 #btnFull.on{background:var(--acc);border-color:var(--acc);color:#fff}
 
@@ -280,7 +341,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 }
 #dimVal{
   font-size:20px; font-weight:650; letter-spacing:-.01em;
-  color:var(--acc, #ff6b3d);
+  color:var(--acc,#8fa6ff);
   font-variant-numeric:tabular-nums; line-height:1.15;
 }
 #dimSub{ font-size:10px; color:var(--txt2, #8b8b96); margin-top:2px; }
@@ -333,7 +394,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 <div id="app">
 
   <div id="topbar">
-    <div class="logo"><span class="dot"></span>ATELIER <b>TATTOO</b> 3D</div>
+    <div class="logo"><span class="lg-dim">ATELIER</span> <b>TATTOO</b> <span class="lg-dim">3D</span></div>
     <div class="seg" id="modelTabs">
       <button data-m="bras" class="on">Bras</button>
       <button data-m="jambe">Jambe</button>
@@ -345,7 +406,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
       <button data-c="female">Female</button>
       <button data-c="super">Super</button>
     </div>
-    <div class="seg" id="modeTabs">
+    <div class="seg mob-bar" id="modeTabs">
       <button data-mode="orbit" class="on">Naviguer</button>
       <button data-mode="place">Placer</button>
     </div>
@@ -390,6 +451,19 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
       <h3><span>2 · Détourage de l'encre</span><span class="chev">▼</span></h3>
       <div class="body">
         <canvas id="cutPreview"></canvas>
+        <!-- Le détourage est automatique dès l'import (analyse du fond) : on
+             n'affiche par défaut que le choix qui reste une vraie décision
+             créative (couleur d'encre). Le réglage fin va dans « Avancé »,
+             repliée, pour ne plus imposer une dizaine de contrôles d'emblée. -->
+        <div class="row wide" style="margin-top:9px"><label>Encre</label>
+          <div class="seg2" id="inkMode">
+            <button data-i="noir" class="on">Noir</button>
+            <button data-i="blanc">Blanc</button>
+            <button data-i="origine">Origine</button>
+          </div>
+        </div>
+        <button class="btn" id="btnCutAdv" style="margin-top:8px">Réglages avancés ▾</button>
+        <div id="cutAdv" class="hid">
         <div class="row wide" style="margin-top:9px"><label>Méthode</label>
           <select id="cutMode">
             <option value="lum">Luminance (garde le noir)</option>
@@ -403,16 +477,10 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
         <input type="range" id="cutDespeckle" min="0" max="60" value="8" hidden><span id="vCutDespeckle" hidden></span>
         <input type="range" id="cutErode" min="-3" max="3" value="0" step="1" hidden><span id="vCutErode" hidden></span>
         <label class="chk"><input type="checkbox" id="cutInvert"><span>Inverser (motif clair sur fond sombre)</span></label>
-        <div class="row wide" style="margin-top:8px"><label>Encre</label>
-          <div class="seg2" id="inkMode">
-            <button data-i="noir" class="on">Noir</button>
-            <button data-i="blanc">Blanc</button>
-            <button data-i="origine">Origine</button>
-          </div>
-        </div>
         <label class="chk"><input type="checkbox" id="cutAuto" checked><span>Analyse automatique du fond</span></label>
         <div class="btnrow"><button class="btn" id="btnCutReset">Réinitialiser</button><button class="btn pri" id="btnCutApply">Appliquer à tout</button></div>
         <div class="hint">Le réglage s'applique au motif sélectionné dans la galerie et à tous ses calques.</div>
+        </div>
       </div>
     </div>
 
@@ -422,7 +490,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
         <div id="layerList"><div class="empty">Aucun tatouage posé.<br>Choisir un motif puis cliquer sur le corps.</div></div>
         <div class="btnrow">
           <button class="btn" id="btnDup" title="Dupliquer (D)">Dupliquer</button>
-          <button class="btn" id="btnMirror" title="Symétrie (M)">Symétrie</button>
+          <button class="btn" id="btnMirror" title="Copie miroir sur l'autre côté du corps (M)">Copier en miroir</button>
           <button class="btn dgr" id="btnDel" title="Supprimer (Suppr)">Supprimer</button>
         </div>
         <div class="sep"></div>
@@ -500,45 +568,44 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <!-- ================= PANNEAU DROIT ================= -->
   <div class="side right" id="sideR">
 
-    <div class="grp" id="gModel">
-      <h3><span>Morphologie</span><span class="chev">▼</span></h3>
+    <!-- Panneau Morphologie retiré de l'UI à la demande de l'utilisateur (ne
+         s'appliquait qu'à l'ancien corps procédural Bras/Jambe, plus utilisé
+         couramment ; certains réglages ne fonctionnaient plus). Les inputs
+         restent en DOM, cachés, avec leurs valeurs par défaut : le code qui
+         les lit via gv() (déformation du modèle importé, teinte carnation…)
+         continue de fonctionner sans modification. -->
+    <div class="grp" id="gModel" hidden>
       <div class="body">
-        <div class="row wide"><label>Genre</label>
-          <div class="seg2" id="genderSeg">
-            <button data-g="0" class="on">Homme</button>
-            <button data-g="100">Femme</button>
-          </div>
+        <div class="seg2" id="genderSeg">
+          <button data-g="0" class="on">Homme</button>
+          <button data-g="100">Femme</button>
         </div>
-        <input type="range" id="mGender" min="0" max="100" value="0" hidden><span id="vmGender" hidden></span>
-        <div class="row"><label>Taille du sujet</label><input type="range" id="mHeight" min="140" max="210" value="178"><span class="num" id="vmHeight">178</span></div>
-        <div class="row"><label>Musculature</label><input type="range" id="mMuscle" min="0" max="100" value="52"><span class="num" id="vmMuscle">52</span></div>
-        <div class="row"><label>Corpulence</label><input type="range" id="mFat" min="0" max="100" value="30"><span class="num" id="vmFat">30</span></div>
-        <input type="range" id="mShoulder" min="0" max="100" value="50" hidden><span id="vmShoulder" hidden>50</span>
-        <input type="range" id="mHips" min="0" max="100" value="50" hidden><span id="vmHips" hidden></span>
-        <div class="row" id="rowPose"><label>Flexion bras</label><input type="range" id="mPose" min="0" max="100" value="18"><span class="num" id="vmPose">18</span></div>
-        <div class="row wide" id="rowSide"><label>Côté</label>
+        <input type="range" id="mGender" min="0" max="100" value="0"><span id="vmGender"></span>
+        <input type="range" id="mHeight" min="140" max="210" value="178"><span id="vmHeight">178</span>
+        <input type="range" id="mMuscle" min="0" max="100" value="52"><span id="vmMuscle">52</span>
+        <input type="range" id="mFat" min="0" max="100" value="30"><span id="vmFat">30</span>
+        <input type="range" id="mShoulder" min="0" max="100" value="50"><span id="vmShoulder">50</span>
+        <input type="range" id="mHips" min="0" max="100" value="50"><span id="vmHips"></span>
+        <div id="rowPose"><input type="range" id="mPose" min="0" max="100" value="18"><span id="vmPose">18</span></div>
+        <div id="rowSide">
           <div class="seg2" id="sideSeg">
             <button data-s="0" class="on">Gauche</button>
             <button data-s="1">Droite</button>
           </div>
         </div>
-        <input type="range" id="mSide" min="0" max="1" step="1" value="0" hidden><span id="vmSide" hidden></span>
-        <!-- Poing / doigts écartés retirés : jamais fiable sur l'anatomie
-             procédurale malgré plusieurs passes de correction. -->
-        <input type="range" id="mFist" min="0" max="100" value="0" hidden><span id="vmFist" hidden></span>
-        <input type="range" id="mSpread" min="0" max="200" value="100" hidden><span id="vmSpread" hidden></span>
-        <div id="rowHand" hidden></div><div id="rowSpread" hidden></div><div id="rowHandChips" hidden></div>
-        <div id="handChips" hidden></div>
-        <div class="sep"></div>
-        <label style="color:var(--txt2);font-size:11px">Carnation</label>
+        <input type="range" id="mSide" min="0" max="1" step="1" value="0"><span id="vmSide"></span>
+        <input type="range" id="mFist" min="0" max="100" value="0"><span id="vmFist"></span>
+        <input type="range" id="mSpread" min="0" max="200" value="100"><span id="vmSpread"></span>
+        <div id="rowHand"></div><div id="rowSpread"></div><div id="rowHandChips"></div>
+        <div id="handChips"></div>
         <div id="skinSw"></div>
-        <div class="row"><label>Teinte</label><input type="range" id="mTint" min="-40" max="40" value="0"><span class="num" id="vmTint">0</span></div>
-        <input type="range" id="mGrain" min="0" max="100" value="30" hidden><span id="vmGrain" hidden>30</span>
-        <div class="row"><label>Sébum</label><input type="range" id="mOil" min="0" max="100" value="34"><span class="num" id="vmOil">34</span></div>
-        <input type="range" id="mRedness" min="0" max="100" value="38" hidden><span id="vmRedness" hidden>38</span>
-        <input type="range" id="mVeins" min="0" max="100" value="55" hidden><span id="vmVeins" hidden>55</span>
-        <input type="range" id="mSSS" min="0" max="100" value="45" hidden><span id="vmSSS" hidden>45</span>
-        <label class="chk"><input type="checkbox" id="mWire"><span>Afficher le maillage</span></label>
+        <input type="range" id="mTint" min="-40" max="40" value="0"><span id="vmTint">0</span>
+        <input type="range" id="mGrain" min="0" max="100" value="30"><span id="vmGrain">30</span>
+        <input type="range" id="mOil" min="0" max="100" value="34"><span id="vmOil">34</span>
+        <input type="range" id="mRedness" min="0" max="100" value="38"><span id="vmRedness">38</span>
+        <input type="range" id="mVeins" min="0" max="100" value="55"><span id="vmVeins">55</span>
+        <input type="range" id="mSSS" min="0" max="100" value="45"><span id="vmSSS">45</span>
+        <input type="checkbox" id="mWire">
       </div>
     </div>
 
@@ -606,7 +673,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
         </div>
         <input type="range" id="vFov" min="14" max="72" value="34" hidden><span id="vvFov" hidden>34</span>
         <div class="row"><label>Rotation auto</label><input type="range" id="vSpin" min="0" max="100" value="0"><span class="num" id="vvSpin">0</span></div>
-        <div class="row"><label>Qualité</label><input type="range" id="vQual" min="50" max="200" value="100"><span class="num" id="vvQual">100</span></div>
+        <input type="range" id="vQual" min="50" max="200" value="100" hidden><span id="vvQual" hidden>100</span>
         <div class="row wide"><label>Export</label>
           <select id="vShotScale"><option value="1">1× écran</option><option value="2" selected>2× (HD)</option><option value="3">3× (impression)</option></select>
         </div>
@@ -621,17 +688,31 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   </div>
 </div>
 
+<!-- Mobile uniquement : bouton menu (rassemble les onglets modèle + actions
+     secondaires du bandeau haut), bouton flottant d'ajout de motif, accès
+     rapide aux calques et aux réglages, voile de fermeture des tiroirs.
+     La barre bas Naviguer/Placer réutilise #modeTabs déjà existant, juste
+     repositionné en CSS (voir media query) : aucune duplication d'ID. -->
+<button id="mobMenuBtn" title="Menu">☰</button>
+<div id="mobBackdrop"></div>
+<div id="mobMenu">
+  <div class="mm-h">Modèle</div>
+</div>
+<button id="fabAdd" title="Ajouter un motif">+</button>
+<button id="mobLayersBtn" title="Calques"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 18l9 5 9-5"/></svg></button>
+<button id="mobSettingsBtn" title="Réglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.9 7.9 0 0 0 0-3l2-1.6-2-3.4-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.4 2 1.6a7.9 7.9 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 2.6 1.5L10 22h4l.4-2.5a8 8 0 0 0 2.6-1.5l2.4 1 2-3.4z"/></svg></button>
+
 <div id="help"><div class="hbox">
   <h2>Atelier Tattoo 3D — mode d'emploi</h2>
-  <p style="color:var(--txt3)">Studio de projection de flash sur anatomie paramétrique.</p>
+  <p style="color:var(--txt3)">Studio de projection de flash sur anatomie 3D.</p>
   <h4>Modèles</h4>
-  <p>Le maillage anatomique provient du corps de référence <b>MakeHuman</b>, publié
-  en domaine public (CC0) : vrai visage, vraies mains à cinq doigts avec ongles,
-  vrais pieds. Les curseurs de morphologie appliquent les <b>cibles de morphing
-  d'origine</b> (homme / femme / musculature / corpulence), pas une déformation
-  approximative. Onglets : <b>Bras</b> (membre sectionné net sous l'épaule),
-  <b>Jambe</b> (sectionnée en haut de cuisse), <b>Corps entier</b>. Le genre se
-  choisit par bouton dans le panneau Morphologie. Voir <code>LICENCES.md</code>.</p>
+  <p><b>Bras</b> et <b>Jambe</b> : membre isolé (MakeHuman, domaine public CC0),
+  utile pour un tatouage de membre bien cadré. <b>Corps entier</b> : bascule
+  entre <b>Male</b>, <b>Female</b> et <b>Super</b>, trois corps animés
+  (marche, course, combat, danse) — pratique pour voir un motif en situation
+  et sous plusieurs poses. Les tatouages posés sur un membre isolé et ceux
+  posés sur un corps entier ne se reportent pas automatiquement de l'un à
+  l'autre : ce sont deux maillages différents. Voir <code>LICENCES.md</code>.</p>
   <h4>Thème</h4>
   <p>Bouton ☾ / ☀ dans la barre du haut, ou <b>Apparence : Sombre / Clair</b> dans
   le panneau « Caméra &amp; rendu », ou la touche <b>T</b>.</p>
@@ -642,6 +723,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <b>Clic droit + glisser</b><span>Translater la vue</span>
     <b>F</b><span>Recadrer sur le modèle</span>
     <b>Z</b><span>Zoomer sur le calque sélectionné</span>
+    <b>M / V</b><span>Naviguer · Placer</span>
   </div>
   <h4>Poser un tatouage</h4>
   <div class="kb">
@@ -650,14 +732,29 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <b>Glisser un calque</b><span>Le déplacer sur la peau, il épouse le relief</span>
     <b>Alt + glisser</b><span>Faire pivoter le calque</span>
     <b>Maj + glisser</b><span>Redimensionner le calque</span>
-    <b>D / Suppr</b><span>Dupliquer · Supprimer (symétrie : icône ⇄ sur le calque)</span>
-     <b>M / V</b><span>Naviguer · Placer</span>
+    <b>D / Suppr</b><span>Dupliquer · Supprimer</span>
+    <b>⇄ sur le calque</b><span>Miroir horizontal, sur place</span>
+    <b>Copier en miroir</b><span>Pose une copie sur le côté opposé du corps</span>
     <b>Cmd/Ctrl + Z</b><span>Annuler · Maj pour rétablir</span>
   </div>
-  <h4>Détourage automatique</h4>
-  <p>Un JPG sur fond blanc est analysé au chargement : la luminance devient le canal alpha, seule l'encre sombre est conservée puis recolorée. Ajustez le seuil, la douceur et le nettoyage dans le panneau 2. Les PNG déjà détourés conservent leur alpha.</p>
+  <h4>Détourage</h4>
+  <p>Automatique au chargement : la luminance devient le canal alpha, seule
+  l'encre sombre est conservée puis recolorée (les PNG déjà détourés gardent
+  leur alpha d'origine). Le choix de couleur d'encre — <b>Noir / Blanc /
+  Origine</b> — reste visible ; seuil, douceur, méthode et nettoyage de fond
+  sont dans « Réglages avancés » du panneau 2, à ouvrir seulement si le
+  résultat automatique ne convient pas.</p>
   <h4>Éclairage</h4>
   <p>Chaque source est positionnable en azimut / hauteur / distance, ou directement à la souris via le manipulateur 3D. La lumière marquée « principale » alimente la diffusion sous-cutanée de la peau.</p>
+  <h4>Compte &amp; sauvegarde</h4>
+  <p>Se connecter (bandeau du haut) permet d'enregistrer la configuration
+  actuelle — modèle, calques, réglages — dans <b>« Mes configurations »</b>
+  (panneau 3) et de la recharger sur n'importe quel appareil.</p>
+  <h4>Mobile</h4>
+  <p>Le modèle occupe tout l'écran. <b>☰</b> ouvre le choix de modèle,
+  <b>+</b> ouvre l'import de motifs, l'icône calques et l'icône réglages
+  ouvrent les panneaux correspondants en tiroir ; la barre du bas bascule
+  Naviguer / Placer.</p>
   <button class="btn pri" id="btnCloseHelp">Fermer</button>
 </div></div>
 <div id="authModal"><div class="hbox">
@@ -666,7 +763,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <div class="row wide"><label>Email</label><input type="email" id="authEmail" autocomplete="username"></div>
   <div class="row wide"><label>Mot de passe</label><input type="password" id="authPass" autocomplete="current-password"></div>
   <div class="row wide" id="rowAuthPass2" style="display:none"><label>Confirmer</label><input type="password" id="authPass2" autocomplete="new-password"></div>
-  <div class="hint" id="authErreur" style="color:#e8503a"></div>
+  <div class="hint" id="authErreur" style="color:var(--err)"></div>
   <div class="btnrow" style="margin-top:14px">
     <button class="btn pri" id="btnAuthValider">Se connecter</button>
     <button class="btn" id="btnAuthFermer">Annuler</button>
@@ -678,7 +775,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 <div id="promptModal"><div class="hbox">
   <h2 id="promptTitre">Nom de la configuration</h2>
   <div class="row wide"><input type="text" id="promptChamp" placeholder="ex. Bras droit — projet manchette"></div>
-  <div class="hint" id="promptErreur" style="color:#e8503a"></div>
+  <div class="hint" id="promptErreur" style="color:var(--err)"></div>
   <div class="btnrow" style="margin-top:14px">
     <button class="btn pri" id="btnPromptValider">Enregistrer</button>
     <button class="btn" id="btnPromptFermer">Annuler</button>
@@ -3824,6 +3921,10 @@ const cutBind=(id,key,parse)=>{
     updateCut();
   });
 };
+$('btnCutAdv').addEventListener('click',()=>{
+  const d=$('cutAdv'), open=d.classList.toggle('hid')===false;
+  $('btnCutAdv').textContent = open ? 'Réglages avancés ▴' : 'Réglages avancés ▾';
+});
 cutBind('cutMode','mode'); cutBind('cutThreshold','thr',parseFloat);
 cutBind('cutSoftness','soft',parseFloat); cutBind('cutContrast','contrast',parseFloat);
 cutBind('cutDespeckle','desp',parseFloat); cutBind('cutErode','erode',parseFloat);
@@ -3967,6 +4068,50 @@ $('btnCloseHelp').addEventListener('click',()=>$('help').classList.remove('show'
 $('help').addEventListener('click',e=>{ if(e.target.id==='help') $('help').classList.remove('show'); });
 $('btnUndo').addEventListener('click',undo);
 $('btnRedo').addEventListener('click',redo);
+
+/* ---------- Interface mobile (tiroirs, menu modèle, barre du bas) ----------
+   Sous 860px, #modelTabs/#corpsSubTabs quittent le bandeau haut pour vivre
+   dans #mobMenu : on les déplace réellement (pas de copie/second id), ce qui
+   garde intacts leurs gestionnaires de clic déjà attachés plus haut. Des
+   commentaires DOM marquent leur place d'origine pour les y remettre si la
+   fenêtre repasse en largeur bureau (redimensionnement, rotation d'écran). */
+(function(){
+  const mq = window.matchMedia('(max-width:860px)');
+  const modelTabs = $('modelTabs'), corpsSubTabs = $('corpsSubTabs'), mobMenu = $('mobMenu');
+  const ancreModel = document.createComment('modelTabs'); modelTabs.after(ancreModel);
+  const ancreCorps = document.createComment('corpsSubTabs'); corpsSubTabs.after(ancreCorps);
+  function placer(mobile){
+    if(mobile){ mobMenu.appendChild(modelTabs); mobMenu.appendChild(corpsSubTabs); }
+    else{ ancreModel.after(modelTabs); ancreCorps.after(corpsSubTabs); }
+  }
+  placer(mq.matches);
+  mq.addEventListener('change', e=>placer(e.matches));
+
+  function fermerTiroirs(){ document.body.classList.remove('mob-menu-open','mob-left-open','mob-right-open'); }
+  $('mobMenuBtn').addEventListener('click',()=>{
+    const ouvert=document.body.classList.toggle('mob-menu-open');
+    document.body.classList.remove('mob-left-open','mob-right-open');
+  });
+  $('fabAdd').addEventListener('click',()=>{
+    document.body.classList.remove('mob-menu-open','mob-right-open');
+    document.body.classList.add('mob-left-open');
+    $('gImport').scrollIntoView({block:'start'});
+  });
+  $('mobLayersBtn').addEventListener('click',()=>{
+    document.body.classList.remove('mob-menu-open','mob-right-open');
+    document.body.classList.add('mob-left-open');
+    $('gLayers').scrollIntoView({block:'start'});
+  });
+  $('mobSettingsBtn').addEventListener('click',()=>{
+    document.body.classList.remove('mob-menu-open','mob-left-open');
+    document.body.classList.add('mob-right-open');
+  });
+  $('mobBackdrop').addEventListener('click', fermerTiroirs);
+  mobMenu.addEventListener('click', e=>{ if(e.target.closest('button')) document.body.classList.remove('mob-menu-open'); });
+  // Toucher la scène 3D referme tout tiroir mobile resté ouvert, sans gêner
+  // le reste de la gestion des clics sur le canevas (capture, pas de stop).
+  $('c3d').addEventListener('pointerdown', ()=>{ if(mq.matches) fermerTiroirs(); }, {capture:true});
+})();
 
 /* ---------- Export du rendu ---------- */
 $('btnShot').addEventListener('click',()=>{
@@ -4247,21 +4392,25 @@ function loadProject(d){
    sommets de peau les plus proches — le motif est alors skinné comme la peau
    et se déforme avec elle.
    ========================================================================== */
+// Incrémenté à chaque mise à jour d'un asset corps/tex — un navigateur (mobile
+// surtout) qui garde une image en cache malgré un « hard refresh » de la page
+// voit quand même la nouvelle texture, puisque son URL change.
+const ASSET_V = '3';
 const CORPS = {
-  male: { nom:'Male', fichier:'corps/male_anime.glb',
-          tex:{ map:'corps/tex/male_d.jpg' } },
+  male: { nom:'Male', fichier:'corps/male_anime.glb?v='+ASSET_V,
+          tex:{ map:'corps/tex/male_d.jpg?v='+ASSET_V } },
           /* Ni normalMap ni roughnessMap : sans tangentes explicites sur un maillage
              issu de Mixamo (enroulement localement inconsistant), le normal
              mapping produit des normales aberrantes qui annulent l'éclairage
              diffuse par endroits (corps quasi noir). Le relief du maillage
              suffit ; male_r.jpg est de toute façon la carte metallic d'origine. */
-  super: { nom:'Super', fichier:'corps/superhuman_anime.glb',
-          tex:{ map:'corps/tex/superhuman_d.jpg' } },
+  super: { nom:'Super', fichier:'corps/superhuman_anime.glb?v='+ASSET_V,
+          tex:{ map:'corps/tex/superhuman_d.jpg?v='+ASSET_V } },
   // Female arrive en quatre maillages (tête, tronc, bras, jambes) portant
   // chacun sa propre texture : on les reconnaît à leur nombre de sommets.
-  female: { nom:'Female', fichier:'corps/female_anime.glb',
+  female: { nom:'Female', fichier:'corps/female_anime.glb?v='+ASSET_V,
           parSommets:{ 35511:'Head', 16653:'Body', 37479:'Arm', 20988:'Leg' },
-          texParPartie:(n)=>({ map:'corps/tex/female_'+n+'_d.jpg' }) }
+          texParPartie:(n)=>({ map:'corps/tex/female_'+n+'_d.jpg?v='+ASSET_V }) }
 };
 
 let corpsActif=null, mixer=null, clipCourant=null, horlogeAnim=new THREE.Clock();

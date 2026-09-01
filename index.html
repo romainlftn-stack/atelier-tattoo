@@ -4287,6 +4287,13 @@ function chargerTexture(url, srgb, aAttendre){
   if(srgb) t.colorSpace=THREE.SRGBColorSpace;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;   // UV en tuiles UDIM sur Female
   t.anisotropy=8; t.flipY=false;          // convention glTF
+  // Chaque île UV touche un fond de remplissage uni près de ses bords ; avec
+  // le mipmapping par défaut, le filtrage minifie en mélangeant des texels
+  // de peau avec ce fond sur les zones vues de biais (silhouette des cuisses,
+  // aisselles…), ce qui produit des taches roses/rouges qui n'existent pas
+  // dans le fichier source. Le désactiver élimine ces taches ; la légère
+  // perte de lissage à distance est sans conséquence pour un buste cadré de près.
+  t.generateMipmaps=false; t.minFilter=THREE.LinearFilter;
   texCache.set(url,t); return t;
 }
 

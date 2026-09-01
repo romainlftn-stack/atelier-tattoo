@@ -2609,8 +2609,23 @@ function buildModel(){
   return c;
 }
 
+/** Boîte englobante exacte d'un corps skinné : Box3.setFromObject() se fie à
+ *  la boîte LOCALE de chaque géométrie, pas toujours recalculée après le
+ *  passage par Mixamo — d'où un cadrage tantôt trop large, tantôt trop
+ *  serré selon le corps. On mesure ici les sommets réellement posés. */
+function boiteCorpsSkinne(){
+  if(!peauxSkinned || !peauxSkinned.length) return null;
+  const b=new THREE.Box3();
+  peauxSkinned.forEach(sm=>{
+    sm.updateMatrixWorld(true);
+    sm.geometry.computeBoundingBox();
+    b.union(sm.geometry.boundingBox.clone().applyMatrix4(sm.matrixWorld));
+  });
+  return b.isEmpty() ? null : b;
+}
 function fitView(anim=true){
-  modelBox.setFromObject(root);
+  const bSkin = modelKind==='corps3d' ? boiteCorpsSkinne() : null;
+  if(bSkin) modelBox.copy(bSkin); else modelBox.setFromObject(root);
   const c=modelBox.getCenter(new THREE.Vector3()), sz=modelBox.getSize(new THREE.Vector3());
   const r=Math.max(sz.x,sz.y*0.62,sz.z)*0.5;
   const dist = r / Math.tan(camera.fov*Math.PI/360) * 1.9;

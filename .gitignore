@@ -11,3 +11,6 @@ pour-mixamo/
 # Fichiers système
 .DS_Store
 node_modules/
+
+# Photos personnelles des tatouages
+tattoos persos/

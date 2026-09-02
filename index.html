@@ -305,16 +305,23 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   html,body{overflow:hidden}
   #app{grid-template-columns:1fr;grid-template-rows:var(--hdr) 1fr;height:100dvh}
   #stage{grid-column:1;grid-row:2;width:100%;height:100%}
-  /* La pastille du modèle est fixe en haut à droite : on réserve sa place
-     pour que le contenu défilant du bandeau ne passe jamais dessous. */
-  #topbar{gap:8px;padding:0 106px 0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+  /* La pastille du modèle est fixe en haut à droite. Une simple réserve en
+     padding ne suffisait pas : le bandeau défile horizontalement et ses
+     boutons passaient sous la pastille dès qu'on le faisait glisser. On
+     raccourcit donc le bandeau lui-même — le contenu est alors coupé net
+     avant la pastille, jamais dessous. */
+  #topbar{gap:8px;padding:0 8px;margin-right:106px;
+          overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   #topbar::-webkit-scrollbar{display:none}
   #topbar .logo{font-size:10.5px;letter-spacing:1px}
   #modeTabs{display:none}
   #modelTabs,#corpsSubTabs{flex:none}
 
-  .side{position:fixed;top:var(--hdr);bottom:0;width:min(86vw,340px);z-index:70;
+  /* Tiroirs sur toute la hauteur de l'écran, un peu plus étroits : ils
+     s'arrêtaient sous le bandeau et laissaient une bande inutile. */
+  .side{position:fixed;top:0;bottom:0;width:min(78vw,308px);z-index:70;
         border:0;box-shadow:0 0 40px rgba(0,0,0,.5);
+        padding-top:calc(8px + env(safe-area-inset-top));
         padding-bottom:calc(60px + env(safe-area-inset-bottom));
         transition:transform .24s cubic-bezier(.2,.8,.3,1)}
   .side.left{left:0;transform:translateX(-104%)}
@@ -375,7 +382,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     background:var(--panel2);border-top:1px solid var(--line);
     padding:8px 10px calc(8px + env(safe-area-inset-bottom));gap:8px
   }
-  body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:11px 0;font-size:12.5px}
+  body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:8px 0;font-size:12.5px}
 
   #hud{bottom:calc(112px + env(safe-area-inset-bottom));max-width:52vw}
   #hudTip{display:none} /* instructions souris, sans objet au toucher */
@@ -468,12 +475,12 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <div class="seg" id="modelTabs">
       <button data-m="bras" class="on">Bras</button>
       <button data-m="jambe">Jambe</button>
-      <button data-m="corps">Corps entier</button>
+      <button data-m="corps">Corps</button>
       <button id="tabGlb" style="display:none" title="Modèle importé">Importé</button>
     </div>
     <div class="seg" id="corpsSubTabs" style="display:none">
-      <button data-c="male" class="on">Male</button>
-      <button data-c="female">Female</button>
+      <button data-c="male" class="on">Homme</button>
+      <button data-c="female">Femme</button>
       <button data-c="super">Super</button>
     </div>
     <div class="seg mob-bar" id="modeTabs">
@@ -503,7 +510,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <div class="side left" id="sideL">
 
     <div class="grp" id="gImport">
-      <h3><span>1 · Flash / motifs</span><span class="cnt" id="cntFlash">0</span><span class="chev">▼</span></h3>
+      <h3><span>Flash / motifs</span><span class="cnt" id="cntFlash">0</span><span class="chev">▼</span></h3>
       <div class="body">
         <div id="dropzone">
           <svg viewBox="0 0 24 24"><path d="M12 16V4M12 4L7 9M12 4l5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
@@ -518,7 +525,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     </div>
 
     <div class="grp" id="gCut">
-      <h3><span>2 · Détourage de l'encre</span><span class="chev">▼</span></h3>
+      <h3><span>Détourage de l'encre</span><span class="chev">▼</span></h3>
       <div class="body">
         <canvas id="cutPreview"></canvas>
         <!-- Le détourage est automatique dès l'import (analyse du fond) : on
@@ -555,7 +562,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     </div>
 
     <div class="grp" id="gLayers">
-      <h3><span>3 · Calques posés</span><span class="cnt" id="cntLayers">0</span><span class="chev">▼</span></h3>
+      <h3><span>Calques posés</span><span class="cnt" id="cntLayers">0</span><span class="chev">▼</span></h3>
       <div class="body">
         <div id="layerList"><div class="empty">Aucun tatouage posé.<br>Choisir un motif puis cliquer sur le corps.</div></div>
         <div class="btnrow">
@@ -573,7 +580,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     </div>
 
     <div class="grp" id="gTat">
-      <h3><span>4 · Réglages du calque</span><span class="chev">▼</span></h3>
+      <h3><span>Réglages du calque</span><span class="chev">▼</span></h3>
       <div class="body" id="tatBody">
         <div id="dimCard">
           <div id="dimVal">—</div>
@@ -654,12 +661,6 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
         </div>
         <div class="row"><label>Musculature</label><input type="range" id="mMuscle" min="0" max="100" value="52"><span class="num" id="vmMuscle">52</span></div>
         <div class="row"><label>Corpulence</label><input type="range" id="mFat" min="0" max="100" value="30"><span class="num" id="vmFat">30</span></div>
-        <div class="sep"></div>
-        <label style="color:var(--txt2);font-size:11px">Carnation</label>
-        <div id="skinSw"></div>
-        <div class="row"><label>Teinte</label><input type="range" id="mTint" min="-40" max="40" value="0"><span class="num" id="vmTint">0</span></div>
-        <div class="row"><label>Sébum</label><input type="range" id="mOil" min="0" max="100" value="34"><span class="num" id="vmOil">34</span></div>
-        <div class="hint">La carnation s'applique aussi aux corps entiers.</div>
         <!-- réglages conservés mais retirés de l'écran -->
         <div hidden>
           <div class="seg2" id="genderSeg"><button data-g="0" class="on">Homme</button><button data-g="100">Femme</button></div>
@@ -674,6 +675,8 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
           <div id="rowHand"></div><div id="rowSpread"></div><div id="rowHandChips"></div>
           <div id="handChips"></div>
           <input type="range" id="mGrain" min="0" max="100" value="30"><span id="vmGrain">30</span>
+          <input type="range" id="mTint" min="-40" max="40" value="0"><span id="vmTint">0</span>
+          <input type="range" id="mOil" min="0" max="100" value="34"><span id="vmOil">34</span>
           <input type="range" id="mRedness" min="0" max="100" value="38"><span id="vmRedness">38</span>
           <input type="range" id="mVeins" min="0" max="100" value="55"><span id="vmVeins">55</span>
           <input type="range" id="mSSS" min="0" max="100" value="45"><span id="vmSSS">45</span>
@@ -683,10 +686,20 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     </div>
 
     <div class="grp contextuel" id="gAnim" hidden>
-      <h3><span>Animations</span><span class="tagctx">Corps entier</span><span class="chev">▼</span></h3>
+      <h3><span>Animations</span><span class="tagctx">Corps</span><span class="chev">▼</span></h3>
       <div class="body">
         <div id="animSlot"></div>
         <div class="hint">Les tatouages se posent à l'arrêt : choisir Pause avant de placer un motif.</div>
+      </div>
+    </div>
+
+    <!-- La carnation vaut pour les cinq modèles : elle a son propre panneau,
+         affiché en permanence, sous Animations sur un corps entier et sous
+         Morphologie sur un membre isolé. -->
+    <div class="grp" id="gPeau">
+      <h3><span>Carnation</span><span class="chev">▼</span></h3>
+      <div class="body">
+        <div id="skinSw"></div>
       </div>
     </div>
 
@@ -791,12 +804,12 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <p style="color:var(--txt3)">Studio de projection de flash sur anatomie 3D.</p>
   <h4>Modèles</h4>
   <p><b>Bras</b> et <b>Jambe</b> : membre isolé (MakeHuman, domaine public CC0),
-  utile pour un tatouage de membre bien cadré. <b>Corps entier</b> : bascule
-  entre <b>Male</b>, <b>Female</b> et <b>Super</b>, trois corps animés
+  utile pour un tatouage de membre bien cadré. <b>Corps</b> : bascule
+  entre <b>Homme</b>, <b>Femme</b> et <b>Super</b>, trois corps animés
   (marche, course, combat, danse). Les cinq modèles partagent le même repère
   anatomique : un motif posé sur l'un se retrouve au bon endroit sur les
   autres. Voir <code>LICENCES.md</code>.</p>
-  <p>La peau des corps entiers est rendue à partir de la carnation choisie,
+  <p>La peau des corps Homme, Femme et Super est rendue à partir de la carnation choisie,
   et non des textures photo livrées avec ces modèles : celles-ci sont des
   atlas de photogrammétrie dont chaque morceau porte une dominante
   différente, ce qui plaquait des taches sur le corps.</p>
@@ -2008,6 +2021,45 @@ const sssCorps = {
   uSSSAmount:{value:0.10}, uSSSPower:sssUniforms.uSSSPower,
   uSSSColor:sssUniforms.uSSSColor, uSSSDir:sssUniforms.uSSSDir
 };
+/* Aréoles et tétons. La peau des corps entiers est une teinte unie — les
+   textures photo livrées avec les modèles sont des atlas de photogrammétrie
+   qui plaquaient des taches — et les modèles n'ont aucun relief à cet endroit.
+   On les peint donc dans le shader, à partir de la position du sommet dans la
+   pose de repos : le motif est donc figé sur la peau et suit parfaitement le
+   skinning, sans géométrie ni texture supplémentaire. */
+const tetonsCorps = {
+  uTetG:{value:new THREE.Vector3()}, uTetD:{value:new THREE.Vector3()},
+  uTetR:{value:0}
+};
+/** Place les aréoles d'après la fiche du modèle (fractions de la stature,
+ *  repère du corps posé : x=0 au milieu, y=0 au sol), puis pose chaque ancre
+ *  sur la peau. Les corps ne sont pas symétriques — 3 cm d'écart entre les
+ *  deux pectoraux de Homme — et une ancre restée dans le vide ne peignait
+ *  qu'un côté. Le point visé est placé légèrement en avant du torse : la
+ *  peau la plus proche est donc le sommet du pectoral ou du sein. */
+function majTetons(cle, H){
+  const t=(CORPS[cle]||{}).tetons;
+  if(!t || !H || !peauxSkinned.length){ tetonsCorps.uTetR.value=0; return; }
+  const cible=[new THREE.Vector3(-t.x*H, t.y*H, t.z*H),
+               new THREE.Vector3( t.x*H, t.y*H, t.z*H)];
+  const pris=[cible[0].clone(), cible[1].clone()], meil=[1e30,1e30];
+  const v=new THREE.Vector3();
+  peauxSkinned.forEach(sm=>{
+    sm.updateMatrixWorld(true);
+    const p=sm.geometry.attributes.position;
+    for(let i=0;i<p.count;i++){
+      v.fromBufferAttribute(p,i).applyMatrix4(sm.matrixWorld);
+      if(v.z<=0) continue;                       // face avant uniquement
+      for(let k=0;k<2;k++){
+        const d=v.distanceToSquared(cible[k]);
+        if(d<meil[k]){ meil[k]=d; pris[k].copy(v); }
+      }
+    }
+  });
+  tetonsCorps.uTetG.value.copy(pris[0]);
+  tetonsCorps.uTetD.value.copy(pris[1]);
+  tetonsCorps.uTetR.value = t.r*H;
+}
 let _matCorps=null;
 function matPeauCorps(){
   if(_matCorps) return _matCorps;
@@ -2018,12 +2070,56 @@ function matPeauCorps(){
     clearcoat:0.0, clearcoatRoughness:0.6, side:THREE.FrontSide
   });
   _matCorps.onBeforeCompile = (sh)=>{
-    Object.assign(sh.uniforms, sssCorps);
+    Object.assign(sh.uniforms, sssCorps, tetonsCorps);
+    // Position de repos (avant skinning), ramenée dans le repère du corps :
+    // la matrice du maillage ne bouge pas pendant les animations, seuls les
+    // os bougent — le repère est donc stable, et commun aux quatre morceaux
+    // de Femme qui partagent ce matériau.
+    sh.vertexShader = sh.vertexShader
+      .replace('void main() {', 'varying vec3 vRepos;\nvoid main() {')
+      .replace('#include <begin_vertex>',
+               '#include <begin_vertex>\n  vRepos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('void main() {', `
         uniform float uSSSAmount; uniform float uSSSPower;
         uniform vec3 uSSSColor; uniform vec3 uSSSDir;
+        uniform vec3 uTetG; uniform vec3 uTetD; uniform float uTetR;
+        varying vec3 vRepos;
         void main() {`)
+      .replace('#include <color_fragment>', `
+        #include <color_fragment>
+        if(uTetR > 0.0){
+          // La profondeur compte moins que la position sur le torse : les
+          // corps ne sont pas parfaitement symétriques (2 cm d'écart entre
+          // les deux pectoraux de Homme) et un ancrage strict en 3D faisait
+          // disparaître une aréole sur deux.
+          const vec3 kZ = vec3(1.0, 1.0, 0.40);
+          float d = min(length((vRepos - uTetG) * kZ), length((vRepos - uTetD) * kZ));
+          float aro = 1.0 - smoothstep(uTetR*0.50, uTetR, d);
+          float pt  = 1.0 - smoothstep(uTetR*0.16, uTetR*0.34, d);
+          vec3 teinte = mix(vec3(1.0), vec3(0.80, 0.60, 0.56), aro*0.80);
+          teinte = mix(teinte, vec3(0.66, 0.44, 0.42), pt*0.55);
+          diffuseColor.rgb *= teinte;
+        }`)
+      // Relief : sans lui l'aréole n'est qu'une tache plate. On dérive la
+      // normale du même champ de distance — aréole légèrement bombée, téton
+      // saillant — comme le ferait une carte de relief, mais sans texture.
+      .replace('#include <normal_fragment_maps>', `
+        #include <normal_fragment_maps>
+        if(uTetR > 0.0){
+          const vec3 kZ2 = vec3(1.0, 1.0, 0.40);
+          float dd = min(length((vRepos - uTetG) * kZ2), length((vRepos - uTetD) * kZ2));
+          float hA = 1.0 - smoothstep(uTetR*0.30, uTetR*0.98, dd);
+          float hP = 1.0 - smoothstep(uTetR*0.10, uTetR*0.34, dd);
+          float hh = (hA*0.28 + hP*0.72) * uTetR * 0.34;
+          vec3 pv = -vViewPosition;
+          vec3 dPx = dFdx(pv), dPy = dFdy(pv);
+          float dHx = dFdx(hh), dHy = dFdy(hh);
+          vec3 Ra = cross(dPy, normal), Rb = cross(normal, dPx);
+          float det = dot(dPx, Ra);
+          vec3 grd = sign(det) * (dHx * Ra + dHy * Rb);
+          normal = normalize(abs(det) * normal - grd);
+        }`)
       .replace('#include <dithering_fragment>', `
         #include <dithering_fragment>
         {
@@ -2928,29 +3024,213 @@ function boiteReelle(obj){
   });
   return b;
 }
-/** Lisse les normales d'un maillage non indexé en soudant par position.
- *  Les corps sortis de Mixamo arrivent à plat : 80 % des sommets partagés y
- *  portent des normales différentes, ce qui fait ressortir chaque facette et
- *  donne cet aspect « taillé à la serpe » sur les cuisses et les bras. On
- *  moyenne les normales des sommets coïncidents — la silhouette ne bouge pas,
- *  seul l'éclairage devient continu. */
+/** Recalcule des normales lisses à partir des faces, en soudant par position.
+ *  Les corps sortis de Mixamo arrivent avec des normales inexploitables :
+ *  moyenner celles du fichier ne faisait que lisser l'erreur, d'où le visage
+ *  griffonné de Femme, les anneaux concentriques sur la poitrine et les
+ *  traînées sur les cuisses — pris pour un défaut de texture alors qu'il n'y
+ *  a aucune texture en cause. On repart donc des faces : normale géométrique
+ *  pondérée par l'aire, accumulée sur les sommets coïncidents. La silhouette
+ *  ne bouge pas, seul l'éclairage devient correct et continu. */
 function lisserNormales(geom){
   const p=geom.attributes.position, n=geom.attributes.normal;
   if(!p || !n) return;
-  const acc=new Map();
-  const cle=i=>Math.round(p.getX(i)*1e4)+'_'+Math.round(p.getY(i)*1e4)+'_'+Math.round(p.getZ(i)*1e4);
+  const idx=geom.index, A=idx?idx.array:null;
+  const nT = idx ? idx.count/3 : p.count/3;
+  // soudure par position au dixième de millimètre : assez fin pour ne jamais
+  // réunir deux surfaces distinctes, assez large pour recoller les coutures UV
+  const map=new Map(), id=new Int32Array(p.count);
   for(let i=0;i<p.count;i++){
-    const k=cle(i), v=acc.get(k);
-    if(v){ v[0]+=n.getX(i); v[1]+=n.getY(i); v[2]+=n.getZ(i); }
-    else acc.set(k,[n.getX(i),n.getY(i),n.getZ(i)]);
+    const k=Math.round(p.getX(i)*1e4)+'_'+Math.round(p.getY(i)*1e4)+'_'+Math.round(p.getZ(i)*1e4);
+    let v=map.get(k);
+    if(v===undefined){ v=map.size; map.set(k,v); }
+    id[i]=v;
+  }
+  const acc=new Float32Array(map.size*3);
+  const a=new THREE.Vector3(), b=new THREE.Vector3(), c=new THREE.Vector3();
+  const e1=new THREE.Vector3(), e2=new THREE.Vector3(), fn=new THREE.Vector3();
+  for(let t=0;t<nT;t++){
+    const i0=A?A[t*3]:t*3, i1=A?A[t*3+1]:t*3+1, i2=A?A[t*3+2]:t*3+2;
+    a.fromBufferAttribute(p,i0); b.fromBufferAttribute(p,i1); c.fromBufferAttribute(p,i2);
+    e1.subVectors(b,a); e2.subVectors(c,a);
+    fn.crossVectors(e1,e2);            // non normalisée : pondère par l'aire
+    const o0=id[i0]*3, o1=id[i1]*3, o2=id[i2]*3;
+    acc[o0]+=fn.x; acc[o0+1]+=fn.y; acc[o0+2]+=fn.z;
+    acc[o1]+=fn.x; acc[o1+1]+=fn.y; acc[o1+2]+=fn.z;
+    acc[o2]+=fn.x; acc[o2+1]+=fn.y; acc[o2+2]+=fn.z;
   }
   for(let i=0;i<p.count;i++){
-    const v=acc.get(cle(i));
-    const l=Math.hypot(v[0],v[1],v[2]) || 1;
-    n.setXYZ(i, v[0]/l, v[1]/l, v[2]/l);
+    const o=id[i]*3, l=Math.hypot(acc[o],acc[o+1],acc[o+2]);
+    if(l>1e-12) n.setXYZ(i, acc[o]/l, acc[o+1]/l, acc[o+2]/l);
   }
   n.needsUpdate=true;
 }
+/* ---------- Globes oculaires ---------------------------------------------
+   Aucun des trois corps n'est livré avec des yeux : Male et Female ont les
+   orbites percées (on voit l'intérieur du crâne, d'où ces trous sombres),
+   Super a les paupières sculptées fermées. On repère les ouvertures dans le
+   haut du maillage et on y loge un globe blanc ; faute d'ouverture, on le
+   place d'après la géométrie du crâne. Les globes sont accrochés à l'os de
+   la tête pour suivre les animations. */
+function trouverOrbites(sm, yMin, H){
+  const g=sm.geometry, p=g.attributes.position, idx=g.index;
+  const nT = idx ? idx.count/3 : p.count/3;
+  const M=sm.matrixWorld, v=new THREE.Vector3();
+  const ids=new Map(), pos=[];          // soudure par position
+  const vid=new Int32Array(p.count).fill(-1);
+  const idOf=(i)=>{
+    if(vid[i]>=0) return vid[i];
+    v.fromBufferAttribute(p,i).applyMatrix4(M);
+    const k=Math.round(v.x*2e4)+','+Math.round(v.y*2e4)+','+Math.round(v.z*2e4);
+    let id=ids.get(k);
+    if(id===undefined){ id=pos.length; ids.set(k,id); pos.push(v.clone()); }
+    vid[i]=id; return id;
+  };
+  const hy=new Float32Array(p.count);
+  for(let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i).applyMatrix4(M); hy[i]=v.y; }
+  const arete=new Map();
+  const A=idx?idx.array:null;
+  for(let t=0;t<nT;t++){
+    const i0=A?A[t*3]:t*3, i1=A?A[t*3+1]:t*3+1, i2=A?A[t*3+2]:t*3+2;
+    if(hy[i0]<yMin || hy[i1]<yMin || hy[i2]<yMin) continue;
+    const a=idOf(i0), b=idOf(i1), c=idOf(i2);
+    [[a,b],[b,c],[c,a]].forEach(([x,y])=>{
+      const k=x<y ? x+'_'+y : y+'_'+x;
+      arete.set(k,(arete.get(k)||0)+1);
+    });
+  }
+  const adj=new Map();
+  arete.forEach((n,k)=>{
+    if(n!==1) return;
+    const [x,y]=k.split('_').map(Number);
+    (adj.get(x)||adj.set(x,[]).get(x)).push(y);
+    (adj.get(y)||adj.set(y,[]).get(y)).push(x);
+  });
+  const vus=new Set(), boucles=[];
+  adj.forEach((_,s)=>{
+    if(vus.has(s)) return;
+    const comp=[], pile=[s]; vus.add(s);
+    while(pile.length){ const u=pile.pop(); comp.push(u);
+      (adj.get(u)||[]).forEach(w=>{ if(!vus.has(w)){ vus.add(w); pile.push(w); } }); }
+    boucles.push(comp);
+  });
+  return boucles.map(L=>{
+    const c=new THREE.Vector3();
+    L.forEach(i=>c.add(pos[i])); c.multiplyScalar(1/L.length);
+    let r=0; L.forEach(i=>{ r=Math.max(r, pos[i].distanceTo(c)); });
+    return {centre:c, rayon:r, n:L.length};
+  }).filter(o=>o.n>=4 && o.rayon < H*0.03);
+}
+let _matOeil=null;
+function matGlobeOeil(){
+  if(!_matOeil) _matOeil=new THREE.MeshPhysicalMaterial({color:0xf2f0ec, roughness:0.30,
+    metalness:0, clearcoat:0.5, clearcoatRoughness:0.25});
+  return _matOeil;
+}
+function ajouterYeux(){
+  if(!peauxSkinned.length) return;
+  // Les matrices monde doivent être à jour : le corps vient d'être recentré
+  // en X, et sans cette remise à plat les orbites étaient repérées dans
+  // l'ancien repère — les globes se retrouvaient décalés sur les tempes.
+  root.updateMatrixWorld(true);
+  const boite=boiteCorpsSkinne(); if(!boite) return;
+  const H=boite.max.y-boite.min.y;
+
+  // Os de la tête : les globes le suivront pendant les animations, et il sert
+  // surtout à isoler le crâne. Un simple « tout ce qui est au-dessus de 82 %
+  // de la stature » attrapait les trapèzes de Super — la boîte faisait alors
+  // la largeur des épaules et les yeux se retrouvaient sur les tempes.
+  let osTete=null, osSommet=null;
+  root.traverse(o=>{
+    if(!o.isBone) return;
+    const n=o.name.replace(/_\d+$/,'');
+    if(!osTete && /head$/i.test(n)) osTete=o;
+    if(!osSommet && /headtop_end$/i.test(n)) osSommet=o;
+  });
+  const pBase=new THREE.Vector3(), pSommet=new THREE.Vector3();
+  if(osTete){ osTete.updateMatrixWorld(true); osTete.getWorldPosition(pBase); }
+  else pBase.set((boite.min.x+boite.max.x)/2, boite.min.y+H*0.86, (boite.min.z+boite.max.z)/2);
+  if(osSommet){ osSommet.updateMatrixWorld(true); osSommet.getWorldPosition(pSommet); }
+  else pSommet.set(pBase.x, boite.max.y, pBase.z);
+  const hT=Math.max(pSommet.distanceTo(pBase), H*0.05);   // hauteur du crâne
+
+  // Boîte du crâne : au-dessus de la nuque et près de son axe vertical.
+  const tete=new THREE.Box3(); {
+    const v=new THREE.Vector3(), rMax=hT*1.15, yMinT=pBase.y-hT*0.20;
+    peauxSkinned.forEach(sm=>{
+      const p=sm.geometry.attributes.position;
+      for(let i=0;i<p.count;i++){
+        v.fromBufferAttribute(p,i).applyMatrix4(sm.matrixWorld);
+        if(v.y<yMinT) continue;
+        if(Math.hypot(v.x-pBase.x, v.z-pBase.z)>rMax) continue;
+        tete.expandByPoint(v);
+      }
+    });
+  }
+  if(tete.isEmpty()) return;
+  const cT=tete.getCenter(new THREE.Vector3()), tT=tete.getSize(new THREE.Vector3());
+  const sens = Math.abs(tete.max.z-cT.z) >= Math.abs(cT.z-tete.min.z) ? 1 : -1;  // côté visage
+  const rIdeal=tT.x*0.085;                       // globe humain : ~1,2 cm
+
+  // Orbites percées (Male, Female) : on cherche les ouvertures du maillage.
+  const yMin=pBase.y-hT*0.20;
+  let cands=[];
+  peauxSkinned.forEach(sm=>{ try{ cands=cands.concat(trouverOrbites(sm,yMin,H)); }catch(e){} });
+  let paire=null, score=1e9;
+  for(let i=0;i<cands.length;i++) for(let j=i+1;j<cands.length;j++){
+    const a=cands[i], b=cands[j];
+    const dx=Math.abs((a.centre.x-cT.x)+(b.centre.x-cT.x));
+    const dy=Math.abs(a.centre.y-b.centre.y);
+    const ec=Math.abs(a.centre.x-b.centre.x);
+    if(ec < tT.x*0.12 || ec > tT.x*0.75) continue;
+    const s=dx+dy;
+    if(s<score && s<tT.x*0.15){ score=s; paire=[a,b]; }
+  }
+
+  let yeux;
+  // Position relevée une fois sur chacun des trois corps livrés : la
+  // détection automatique ci-dessus reste le repli pour tout autre maillage,
+  // mais elle ne peut pas deviner qu'un modèle n'a qu'un trou de canal
+  // lacrymal (Femme) ou des paupières pleines (Super). Les décalages sont
+  // exprimés en fractions de la stature et rapportés à l'os de la tête :
+  // ils suivent donc le réglage de taille et les animations.
+  const forcee=(CORPS[corpsActif]||{}).yeux;
+  if(forcee){
+    const r=forcee.r*H;
+    yeux=[forcee.g, forcee.d].map(o=>({r,
+      c:new THREE.Vector3(pBase.x+o[0]*H, pBase.y+o[1]*H, pBase.z+o[2]*H)}));
+  } else if(paire){
+    // Le globe remplit l'orbite sans saillir. L'ouverture mesurée sert de
+    // repère, mais elle est bornée : Female a des fentes de 4 mm et son
+    // globe aurait disparu au fond de l'orbite.
+    const rBrut=Math.max(paire[0].rayon, paire[1].rayon)*1.05;
+    const r=clamp(rBrut, rIdeal*0.75, rIdeal*1.30);
+    const regard=new THREE.Vector3(0,0,sens);
+    yeux=paire.map(o=>({c:o.centre.clone().addScaledVector(regard, -r*0.55), r}));
+  } else {
+    // Paupières sculptées fermées (Super) : on déduit tout du crâne.
+    const y=tete.max.y-tT.y*0.42;               // ligne des yeux
+    const z=cT.z+sens*(tT.z*0.30);
+    yeux=[-1,1].map(s=>({c:new THREE.Vector3(cT.x+s*tT.x*0.19, y, z), r:rIdeal}));
+  }
+
+  const mat=matGlobeOeil();
+  yeux.forEach(y=>{
+    const s=new THREE.Mesh(new THREE.SphereGeometry(y.r, 24, 18), mat);
+    s.castShadow=false; s.receiveShadow=false;
+    s.userData.oeil=true;
+    if(osTete){
+      s.position.copy(y.c).applyMatrix4(new THREE.Matrix4().copy(osTete.matrixWorld).invert());
+      // Le rayon est mesuré dans le monde, mais l'os porte sa propre échelle
+      // (0,008 sur Super) : sans compensation le globe faisait un demi-
+      // millimètre et restait invisible au fond de l'orbite.
+      const e=osTete.getWorldScale(new THREE.Vector3());
+      s.scale.setScalar(1/Math.max((e.x+e.y+e.z)/3, 1e-9));
+      osTete.add(s);
+    } else { s.position.copy(y.c); root.add(s); }
+  });
+}
+
 function boiteCorpsSkinne(){
   if(!peauxSkinned || !peauxSkinned.length) return null;
   const b=new THREE.Box3();
@@ -2977,9 +3257,15 @@ function fitView(anim=true){
   controls.update();
 }
 function setView(v){
-  modelBox.setFromObject(root);
+  const bSkin = modelKind==='corps3d' ? boiteCorpsSkinne() : null;
+  if(bSkin) modelBox.copy(bSkin); else modelBox.setFromObject(root);
   const c=modelBox.getCenter(new THREE.Vector3()), sz=modelBox.getSize(new THREE.Vector3());
-  const d=Math.max(sz.x,sz.y*0.62,sz.z)/Math.tan(camera.fov*Math.PI/360)*1.85;
+  // Même règle de cadrage que fitView (la stature, pas l'envergure) et recul
+  // plus court : les vues F/D/G/R/H s'éloignaient nettement trop du modèle.
+  const r = modelKind==='corps3d'
+    ? Math.max(sz.y*0.60, sz.x*0.42, sz.z*0.42)*0.5
+    : Math.max(sz.x, sz.y*0.62, sz.z)*0.5;
+  const d = r/Math.tan(camera.fov*Math.PI/360)*1.9;
   const dirs={front:[0,0,1],back:[0,0,-1],left:[-1,0,0],right:[1,0,0],top:[0,1,0.001]};
   if(v==='fit'){ fitView(); return; }
   if(v==='focus'){ focusSelected(); return; }
@@ -3685,6 +3971,11 @@ function rebuildDecal(l){
     }
   });
   if(selLayer>=0 && layers[selLayer]===l) placeSelRing(l);
+  // Sans cela la scène ne se redessine pas : le changement d'encre
+  // (Noir / Blanc / Origine) était bien appliqué au premier clic mais
+  // restait invisible jusqu'au rendu suivant, d'où l'impression qu'il
+  // fallait cliquer deux fois.
+  markDirty();
 }
 /* L'anneau n'existe qu'en mode Placer : en mode Naviguer on regarde le
    modèle, rien ne doit l'entourer. En Placer il montre le calque visé —
@@ -4945,20 +5236,32 @@ function loadProject(d){
 // voit quand même la nouvelle texture, puisque son URL change.
 const ASSET_V = '3';
 const CORPS = {
-  male: { nom:'Male', fichier:'corps/male_anime.glb?v='+ASSET_V,
-          tex:{ map:'corps/tex/male_d.jpg?v='+ASSET_V } },
+  male: { nom:'Homme', fichier:'corps/male_anime.glb?v='+ASSET_V,
+          tex:{ map:'corps/tex/male_d.jpg?v='+ASSET_V },
+          yeux:{ r:0.00742, g:[-0.01371,0.06084,0.05782], d:[0.02444,0.06084,0.04983] },
+          tetons:{ x:0.0421, y:0.7337, z:0.0400, r:0.0124 } },
           /* Ni normalMap ni roughnessMap : sans tangentes explicites sur un maillage
              issu de Mixamo (enroulement localement inconsistant), le normal
              mapping produit des normales aberrantes qui annulent l'éclairage
              diffuse par endroits (corps quasi noir). Le relief du maillage
              suffit ; male_r.jpg est de toute façon la carte metallic d'origine. */
   super: { nom:'Super', fichier:'corps/superhuman_anime.glb?v='+ASSET_V,
-          tex:{ map:'corps/tex/superhuman_d.jpg?v='+ASSET_V } },
+          tex:{ map:'corps/tex/superhuman_d.jpg?v='+ASSET_V },
+          /* Super a les paupières sculptées fermées : aucune ouverture à
+             détecter dans le maillage, et ses proportions de caricature
+             (crâne énorme, yeux rapprochés) rendent toute règle anatomique
+             fausse. Position relevée une fois sur le modèle, exprimée en
+             fractions de la stature et rapportée à l'os de la tête, donc
+             indépendante du réglage de taille. */
+          yeux:{ r:0.0095, g:[-0.0200,0.0494,0.0731], d:[0.0200,0.0494,0.0731] },
+          tetons:{ x:0.0720, y:0.6720, z:0.1650, r:0.0210 } },
   // Female arrive en quatre maillages (tête, tronc, bras, jambes) portant
   // chacun sa propre texture : on les reconnaît à leur nombre de sommets.
-  female: { nom:'Female', fichier:'corps/female_anime.glb?v='+ASSET_V,
+  female: { nom:'Femme', fichier:'corps/female_anime.glb?v='+ASSET_V,
           parSommets:{ 35511:'Head', 16653:'Body', 37479:'Arm', 20988:'Leg' },
-          texParPartie:(n)=>({ map:'corps/tex/female_'+n+'_d.jpg?v='+ASSET_V }) }
+          texParPartie:(n)=>({ map:'corps/tex/female_'+n+'_d.jpg?v='+ASSET_V }),
+          yeux:{ r:0.0070, g:[-0.0165,0.0547,0.0545], d:[0.0165,0.0547,0.0545] },
+          tetons:{ x:0.0377, y:0.7372, z:0.0850, r:0.0118 } }
 };
 
 let corpsActif=null, mixer=null, clipCourant=null, horlogeAnim=new THREE.Clock();
@@ -5034,7 +5337,6 @@ async function _chargerCorpsInterne(cle){
   const racine=g.scene;
   // Un seul matériau propre, partagé : pas de texture à télécharger, donc
   // pas d'attente réseau ni de premier rendu noir à rattraper.
-  const matCorps=matPeauCorps();
   racine.traverse(o=>{
     if(!o.isMesh && !o.isSkinnedMesh) return;
     // L'export FBX -> GLB perd les normales : sans elles aucun éclairage n'est
@@ -5042,7 +5344,8 @@ async function _chargerCorpsInterne(cle){
     // dans la pose de repos — le shader de skinning les déformera ensuite.
     if(!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
     lisserNormales(o.geometry);
-    o.material=matCorps; o.castShadow=o.receiveShadow=true;
+    o.material=matPeauCorps();
+    o.castShadow=o.receiveShadow=true;
     if(o.isSkinnedMesh){ peauxSkinned.push(o); if(!squelette) squelette=o.skeleton; }
   });
   majPeauCorps();
@@ -5062,6 +5365,7 @@ async function _chargerCorpsInterne(cle){
   racine.position.z-=(bb.min.z+bb.max.z)/2;
   racine.updateMatrixWorld(true);
   root.add(racine);
+  majTetons(cle, H);
 
   // proxys de pose de repos : ce sont eux que l'on interroge et décalque
   peauxSkinned.forEach(sm=>{
@@ -5070,13 +5374,15 @@ async function _chargerCorpsInterne(cle){
     root.add(px); bindProxies.push(px); bodyMeshes.push(px);
   });
   if(!peauxSkinned.length) racine.traverse(o=>{ if(o.isMesh){ o.userData.body=true; bodyMeshes.push(o); } });
+  try{ ajouterYeux(); }catch(e){ /* un modèle sans orbite lisible reste utilisable */ }
 
   // Skeleton.pose() ne suffit pas : l'animation touche aussi des noeuds qui ne
   // sont pas des os. On mémorise donc la transformation initiale de tout le
   // sous-arbre pour pouvoir revenir exactement à la pose de repos.
   poseRepos=[];
   racine.traverse(o=>{ poseRepos.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
-  g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative));
+  // Les clips sont réancrés sur la pose de repos, relevée avant toute animation.
+  g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative, racine));
   mixer = g.animations.length ? new THREE.AnimationMixer(racine) : null;
   window.__clips = g.animations;
   clipCourant=null;
@@ -5105,22 +5411,38 @@ async function _chargerCorpsInterne(cle){
  *  le ballant vertical naturel de la démarche. Corriger la caméra à la volée
  *  ne suffisait pas : elle suivait avec un temps de retard et le cadrage
  *  dérivait quand même. */
-function figerRacineClip(clip, hauteurNative){
+function figerRacineClip(clip, hauteurNative, racine){
   const ampMax = (hauteurNative||0)*0.09;   // ballant vertical toléré
   clip.tracks.forEach(tr=>{
     if(!/\.position$/.test(tr.name)) return;
-    if(!/hips|root|racine|bassin/i.test(tr.name)) return;
+    const nom=tr.name.replace(/\.position$/,'');
+    // Le suffixe numérique compte : sur Female le bassin piloté s'appelle
+    // « mixamorigHips_1 », et une expression trop stricte laissait son clip
+    // non réancré — c'est elle qui tombait en bas de l'écran.
+    if(!/(hips|root|racine|bassin)(_\d+)?$/i.test(nom)) return;
+    // Position de repos du noeud réellement piloté par cette piste.
+    let repos=null;
+    if(racine) racine.traverse(o=>{ if(!repos && o.name===nom) repos=o.position.clone(); });
     const v=tr.values;
     if(v.length<3) return;
-    const x0=v[0], y0=v[1], z0=v[2];
+    const y0=v[1];
     let dev=0;
     for(let i=1;i<v.length;i+=3) dev=Math.max(dev, Math.abs(v[i]-y0));
     // La danse comporte des sauts d'une soixantaine de centimètres : on les
     // tasse pour que le corps reste dans le cadre, sans figer le mouvement.
     const k = (ampMax>0 && dev>ampMax) ? ampMax/dev : 1;
+    // On réancre sur la position de repos du bassin, pas sur la première image
+    // du clip. Ces animations ont été calculées pour un squelette dont le
+    // bassin est à l'origine, alors qu'il est ailleurs sur ces modèles
+    // (Male à z=-0,99, Super à z=-23,9) : lancer une animation téléportait
+    // donc le corps — il « grossissait » en venant vers la caméra ou tombait
+    // hors cadre. Le mouvement est conservé, seul son point d'ancrage change.
+    const rx = repos ? repos.x : v[0];
+    const ry = repos ? repos.y : y0;
+    const rz = repos ? repos.z : v[2];
     for(let i=0;i<v.length;i+=3){
-      v[i]=x0; v[i+2]=z0;
-      if(k!==1) v[i+1]=y0+(v[i+1]-y0)*k;
+      v[i]=rx; v[i+2]=rz;
+      v[i+1]=ry + (v[i+1]-y0)*k;
     }
   });
   return clip;
@@ -5136,13 +5458,24 @@ function jouerAnim(nom){
     poseRepos.forEach(([o,p,q,e])=>{ o.position.copy(p); o.quaternion.copy(q); o.scale.copy(e); });
     if(squelette) squelette.pose();
     peauxSkinned.forEach(sm=>sm.updateMatrixWorld(true));
-    majBoutonsAnim('__stop'); markDirty(); return;
+    majBoutonsAnim('__stop');
+    if(modelKind==='corps3d') fitView();
+    markDirty(); return;
   }
   const cl=(window.__clips||[]).find(c=>c.name===nom);
   if(!cl){ toast('Animation « '+nom+' » absente', true); return; }
   mixer.stopAllAction();
   mixer.clipAction(cl).reset().play();
   clipCourant=cl; majBoutonsAnim(nom);
+  // Un mouvement ample (danse, combat) étend le corps jusqu'à une fois et
+  // demie sa boîte au repos : on recule un peu pour qu'il reste entier dans
+  // le cadre, et Pause revient au cadrage normal.
+  if(modelKind==='corps3d'){
+    const d=camera.position.distanceTo(controls.target);
+    const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+    camera.position.copy(controls.target).addScaledVector(dir, d*1.3);
+    controls.update(); markDirty();
+  }
 }
 $$('#animBar button').forEach(b=>b.addEventListener('click',()=>jouerAnim(b.dataset.a)));
 let dernierCorps3D='male';
@@ -5166,21 +5499,45 @@ function skinnerDecal(geoDecal, sm){
   const v=new THREE.Vector3(), a=new THREE.Vector3(), b=new THREE.Vector3(), c=new THREE.Vector3();
   const grille=triGrid(src);
   if(!_pxBuf.length || _pxBuf.length<nT) _pxBuf=new Int32Array(nT);
+  // Le rayon de recherche doit suivre l'échelle du maillage : il était figé à
+  // 0,06 unité locale, ce qui ne trouvait aucun triangle sur les modèles dont
+  // les unités natives sont grandes (Super travaille en dizaines d'unités).
+  // Les sommets orphelins retombaient alors sur l'os 0 avec un poids de 1 :
+  // un morceau du tatouage se retrouvait accroché à la racine du squelette et
+  // « sautait » à part du reste.
+  src.computeBoundingBox();
+  const diag=src.boundingBox.max.distanceTo(src.boundingBox.min) || 1;
+  const r0=diag*0.01;
+  const vs=[a,b,c];
   for(let k=0;k<n;k++){
     v.fromBufferAttribute(p,k).applyMatrix4(inv);
-    // triangle le plus proche via la grille spatiale déjà construite
+    // triangle le plus proche via la grille spatiale déjà construite,
+    // en élargissant la recherche tant qu'on ne trouve rien
     let best=-1, bestD=1e30;
-    const near=trisNear(src, v, 0.06, _pxBuf);
-    for(let q=0;q<near;q++){
-      const t=_pxBuf[q];
-      const i0=(grille.idx?grille.idx[t*3]:t*3), i1=(grille.idx?grille.idx[t*3+1]:t*3+1), i2=(grille.idx?grille.idx[t*3+2]:t*3+2);
-      a.fromBufferAttribute(posS,i0); b.fromBufferAttribute(posS,i1); c.fromBufferAttribute(posS,i2);
-      const d=v.distanceToSquared(a)+v.distanceToSquared(b)+v.distanceToSquared(c);
-      if(d<bestD){ bestD=d; best=t; }
+    for(let essai=0, r=r0; essai<7 && best<0; essai++, r*=2){
+      const near=trisNear(src, v, r, _pxBuf);
+      for(let q=0;q<near;q++){
+        const t=_pxBuf[q];
+        const i0=(grille.idx?grille.idx[t*3]:t*3), i1=(grille.idx?grille.idx[t*3+1]:t*3+1), i2=(grille.idx?grille.idx[t*3+2]:t*3+2);
+        a.fromBufferAttribute(posS,i0); b.fromBufferAttribute(posS,i1); c.fromBufferAttribute(posS,i2);
+        const d=Math.min(v.distanceToSquared(a), v.distanceToSquared(b), v.distanceToSquared(c));
+        if(d<bestD){ bestD=d; best=t; }
+      }
     }
     if(best<0){ ow[k*4]=1; continue; }
-    const i0=(grille.idx?grille.idx[best*3]:best*3);
-    for(let j=0;j<4;j++){ oi[k*4+j]=si.array[i0*4+j]; ow[k*4+j]=sw.array[i0*4+j]; }
+    // On reprend les poids du sommet le plus proche du triangle retenu, et
+    // non systématiquement du premier : à cheval sur deux os, prendre le
+    // mauvais sommet décalait le bord du motif.
+    const ids=[(grille.idx?grille.idx[best*3]:best*3),
+               (grille.idx?grille.idx[best*3+1]:best*3+1),
+               (grille.idx?grille.idx[best*3+2]:best*3+2)];
+    let iBest=ids[0], dBest=1e30;
+    for(let j=0;j<3;j++){
+      vs[j].fromBufferAttribute(posS, ids[j]);
+      const d=v.distanceToSquared(vs[j]);
+      if(d<dBest){ dBest=d; iBest=ids[j]; }
+    }
+    for(let j=0;j<4;j++){ oi[k*4+j]=si.array[iBest*4+j]; ow[k*4+j]=sw.array[iBest*4+j]; }
   }
   geoDecal.setAttribute('skinIndex', new THREE.BufferAttribute(oi,4));
   geoDecal.setAttribute('skinWeight', new THREE.BufferAttribute(ow,4));

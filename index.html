@@ -35,6 +35,12 @@ body{
   -webkit-font-smoothing:antialiased; user-select:none;
 }
 button,input,select,textarea{font:inherit;color:inherit}
+/* Au toucher, un premier appui sert souvent à « poser le doigt » (arrêt de
+   l'inertie de défilement, état survol simulé) et n'est pas délivré comme un
+   clic : d'où l'impression qu'il faut appuyer deux fois sur Noir / Blanc /
+   Origine. touch-action:manipulation supprime l'attente de double-tap et rend
+   le premier appui effectif. */
+button,.chip,.sw,.gitem,.layer,.ic,.seg button,.seg2 button{touch-action:manipulation}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid var(--panel)}
@@ -57,6 +63,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .logo{display:flex;align-items:center;gap:5px;font-weight:600;letter-spacing:1.6px;font-size:12px;white-space:nowrap}
 .logo b{color:var(--acc);font-weight:700}
 .logo .lg-dim{color:var(--txt2);font-weight:500}
+/* Marque : un cercle d'aiguille et son point d'encre. */
+.logo .lg-mark{width:17px;height:17px;flex:none;margin-right:3px;
+  fill:none;stroke:var(--acc);stroke-width:1.7}
+.logo .lg-mark .plein{fill:var(--acc);stroke:none}
 .seg{display:flex;background:var(--well);border:1px solid var(--line);border-radius:var(--r);padding:2px;gap:2px}
 .seg button{background:none;border:0;padding:5px 11px;border-radius:6px;color:var(--txt2);cursor:pointer;
   font-size:11.5px;font-weight:500;transition:.13s;white-space:nowrap}
@@ -82,6 +92,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* ---------- PANEL SECTIONS ---------- */
 .grp{border-bottom:1px solid var(--line)}
+/* Panneau qui change selon le modèle affiché : fond légèrement distinct et
+   liseré d'accent, pour qu'on voie qu'il n'est pas fixe. */
+.grp.contextuel{background:var(--panel2);box-shadow:inset 3px 0 0 var(--acc)}
+.grp.contextuel > h3{color:var(--txt)}
+.tagctx{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--acc);
+  border:1px solid var(--acc);border-radius:20px;padding:1px 7px;margin-left:auto;opacity:.85}
+#animSlot{display:flex}
+/* La même barre d'animations sert à deux endroits : ancrée dans le panneau
+   sur grand écran, flottante au-dessus de la scène sur mobile. On la déplace
+   réellement (voir script) plutôt que d'en dupliquer une seconde. */
+#animBar.docked{position:static;transform:none;left:auto;bottom:auto;
+  background:none;border:0;box-shadow:none;padding:0;max-width:none;
+  display:flex;flex-wrap:wrap;gap:6px;width:100%}
+#animBar.docked button{flex:1 1 44%;background:var(--elev1);border:1px solid var(--line);
+  color:var(--txt2);border-radius:8px;padding:9px 6px;font-size:11.5px}
+#animBar.docked button:hover{color:var(--txt);background:var(--elev2)}
+#animBar.docked button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+#animBar.docked #animNote{display:none}
 .grp>h3{display:flex;align-items:center;gap:7px;padding:10px 12px;cursor:pointer;font-size:11px;
   text-transform:uppercase;letter-spacing:.9px;color:var(--txt2);font-weight:650;background:var(--panel2)}
 .grp>h3:hover{color:var(--txt)}
@@ -158,6 +186,9 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   border:1px solid transparent;cursor:pointer;transition:.12s}
 .layer:hover{background:var(--rowh)}
 .layer.on{background:var(--rowon);border-color:var(--acc)}
+/* Dans une sélection multiple, le calque « principal » (celui que le panneau
+   de réglages affiche) porte un liseré plus marqué. */
+.layer.principal{box-shadow:inset 0 0 0 1px var(--acc)}
 .layer .th{width:26px;height:26px;border-radius:4px;flex:none;object-fit:contain;background:var(--well)}
 .layer .nm{flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .layer .ic{width:19px;height:19px;border-radius:4px;display:grid;place-items:center;color:var(--txt3);
@@ -394,7 +425,13 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 <div id="app">
 
   <div id="topbar">
-    <div class="logo"><span class="lg-dim">ATELIER</span> <b>TATTOO</b> <span class="lg-dim">3D</span></div>
+    <div class="logo">
+      <svg class="lg-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.2"/>
+        <circle cx="12" cy="12" r="3.4" class="plein"/>
+      </svg>
+      <span class="lg-dim">ATELIER</span> <b>TATTOO</b> <span class="lg-dim">3D</span>
+    </div>
     <div class="seg" id="modelTabs">
       <button data-m="bras" class="on">Bras</button>
       <button data-m="jambe">Jambe</button>
@@ -490,7 +527,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
         <div id="layerList"><div class="empty">Aucun tatouage posé.<br>Choisir un motif puis cliquer sur le corps.</div></div>
         <div class="btnrow">
           <button class="btn" id="btnDup" title="Dupliquer (D)">Dupliquer</button>
-          <button class="btn" id="btnMirror" title="Copie miroir sur l'autre côté du corps (M)">Copier en miroir</button>
+          <button class="btn" id="btnMirror" title="Copie miroir sur l'autre côté du corps (M)">Copie miroir</button>
           <button class="btn dgr" id="btnDel" title="Supprimer (Suppr)">Supprimer</button>
         </div>
         <div class="sep"></div>
@@ -568,44 +605,55 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <!-- ================= PANNEAU DROIT ================= -->
   <div class="side right" id="sideR">
 
-    <!-- Panneau Morphologie retiré de l'UI à la demande de l'utilisateur (ne
-         s'appliquait qu'à l'ancien corps procédural Bras/Jambe, plus utilisé
-         couramment ; certains réglages ne fonctionnaient plus). Les inputs
-         restent en DOM, cachés, avec leurs valeurs par défaut : le code qui
-         les lit via gv() (déformation du modèle importé, teinte carnation…)
-         continue de fonctionner sans modification. -->
-    <div class="grp" id="gModel" hidden>
+    <!-- Panneau contextuel : morphologie sur Bras/Jambe (le corps procédural
+         y répond réellement), animations sur les corps entiers. Un liseré et
+         un fond légèrement distincts signalent qu'il change avec le modèle.
+         Les réglages sans effet — genre, stature, maillage — restent en DOM
+         cachés pour que gv() continue de les lire, sans encombrer l'écran. -->
+    <div class="grp contextuel" id="gModel">
+      <h3><span>Morphologie</span><span class="tagctx">Bras / Jambe</span><span class="chev">▼</span></h3>
       <div class="body">
-        <div class="seg2" id="genderSeg">
-          <button data-g="0" class="on">Homme</button>
-          <button data-g="100">Femme</button>
-        </div>
-        <input type="range" id="mGender" min="0" max="100" value="0"><span id="vmGender"></span>
-        <input type="range" id="mHeight" min="140" max="210" value="178"><span id="vmHeight">178</span>
-        <input type="range" id="mMuscle" min="0" max="100" value="52"><span id="vmMuscle">52</span>
-        <input type="range" id="mFat" min="0" max="100" value="30"><span id="vmFat">30</span>
-        <input type="range" id="mShoulder" min="0" max="100" value="50"><span id="vmShoulder">50</span>
-        <input type="range" id="mHips" min="0" max="100" value="50"><span id="vmHips"></span>
-        <div id="rowPose"><input type="range" id="mPose" min="0" max="100" value="18"><span id="vmPose">18</span></div>
-        <div id="rowSide">
+        <div class="row wide" id="rowSide"><label>Côté</label>
           <div class="seg2" id="sideSeg">
             <button data-s="0" class="on">Gauche</button>
             <button data-s="1">Droite</button>
           </div>
         </div>
-        <input type="range" id="mSide" min="0" max="1" step="1" value="0"><span id="vmSide"></span>
-        <input type="range" id="mFist" min="0" max="100" value="0"><span id="vmFist"></span>
-        <input type="range" id="mSpread" min="0" max="200" value="100"><span id="vmSpread"></span>
-        <div id="rowHand"></div><div id="rowSpread"></div><div id="rowHandChips"></div>
-        <div id="handChips"></div>
+        <div class="row"><label>Musculature</label><input type="range" id="mMuscle" min="0" max="100" value="52"><span class="num" id="vmMuscle">52</span></div>
+        <div class="row"><label>Corpulence</label><input type="range" id="mFat" min="0" max="100" value="30"><span class="num" id="vmFat">30</span></div>
+        <div class="sep"></div>
+        <label style="color:var(--txt2);font-size:11px">Carnation</label>
         <div id="skinSw"></div>
-        <input type="range" id="mTint" min="-40" max="40" value="0"><span id="vmTint">0</span>
-        <input type="range" id="mGrain" min="0" max="100" value="30"><span id="vmGrain">30</span>
-        <input type="range" id="mOil" min="0" max="100" value="34"><span id="vmOil">34</span>
-        <input type="range" id="mRedness" min="0" max="100" value="38"><span id="vmRedness">38</span>
-        <input type="range" id="mVeins" min="0" max="100" value="55"><span id="vmVeins">55</span>
-        <input type="range" id="mSSS" min="0" max="100" value="45"><span id="vmSSS">45</span>
-        <input type="checkbox" id="mWire">
+        <div class="row"><label>Teinte</label><input type="range" id="mTint" min="-40" max="40" value="0"><span class="num" id="vmTint">0</span></div>
+        <div class="row"><label>Sébum</label><input type="range" id="mOil" min="0" max="100" value="34"><span class="num" id="vmOil">34</span></div>
+        <div class="hint">La carnation s'applique aussi aux corps entiers.</div>
+        <!-- réglages conservés mais retirés de l'écran -->
+        <div hidden>
+          <div class="seg2" id="genderSeg"><button data-g="0" class="on">Homme</button><button data-g="100">Femme</button></div>
+          <input type="range" id="mGender" min="0" max="100" value="0"><span id="vmGender"></span>
+          <input type="range" id="mHeight" min="140" max="210" value="178"><span id="vmHeight">178</span>
+          <input type="range" id="mShoulder" min="0" max="100" value="50"><span id="vmShoulder">50</span>
+          <input type="range" id="mHips" min="0" max="100" value="50"><span id="vmHips"></span>
+          <div id="rowPose"><input type="range" id="mPose" min="0" max="100" value="18"><span id="vmPose">18</span></div>
+          <input type="range" id="mSide" min="0" max="1" step="1" value="0"><span id="vmSide"></span>
+          <input type="range" id="mFist" min="0" max="100" value="0"><span id="vmFist"></span>
+          <input type="range" id="mSpread" min="0" max="200" value="100"><span id="vmSpread"></span>
+          <div id="rowHand"></div><div id="rowSpread"></div><div id="rowHandChips"></div>
+          <div id="handChips"></div>
+          <input type="range" id="mGrain" min="0" max="100" value="30"><span id="vmGrain">30</span>
+          <input type="range" id="mRedness" min="0" max="100" value="38"><span id="vmRedness">38</span>
+          <input type="range" id="mVeins" min="0" max="100" value="55"><span id="vmVeins">55</span>
+          <input type="range" id="mSSS" min="0" max="100" value="45"><span id="vmSSS">45</span>
+          <input type="checkbox" id="mWire">
+        </div>
+      </div>
+    </div>
+
+    <div class="grp contextuel" id="gAnim" hidden>
+      <h3><span>Animations</span><span class="tagctx">Corps entier</span><span class="chev">▼</span></h3>
+      <div class="body">
+        <div id="animSlot"></div>
+        <div class="hint">Les tatouages se posent à l'arrêt : choisir Pause avant de placer un motif.</div>
       </div>
     </div>
 
@@ -3630,7 +3678,8 @@ function renderLayers(){
   layers.forEach((l,i)=>{
     const f=flashes.find(x=>x.id===l.flash);
     const d=document.createElement('div');
-    d.className='layer'+(i===selLayer?' on':'');
+    const sel = selIds.size ? selIds.has(l.id) : (i===selLayer);
+    d.className='layer'+(sel?' on':'')+(i===selLayer&&selIds.size>1?' principal':'');
     d.innerHTML=`<img class="th" src="${f?f.thumb:''}">
       <span class="nm">${l.name}</span>
       <span class="ic${l.flipH?'':' off'}" data-a="m" title="Miroir horizontal">⇄</span>
@@ -3641,15 +3690,43 @@ function renderLayers(){
       if(a==='v'){ l.visible=!l.visible; rebuildDecal(l); renderLayers(); return; }
       if(a==='l'){ l.locked=!l.locked; renderLayers(); return; }
       if(a==='m'){ l.flipH=!l.flipH; refreshLayerMaterial(l); renderLayers(); markDirty(); return; }
-      selectLayer(i);
+      selectLayer(i, (e.metaKey||e.ctrlKey) ? 'toggle' : (e.shiftKey ? 'range' : null));
     });
     box.appendChild(d);
   });
 }
-function selectLayer(i){
-  selLayer=i; renderLayers(); loadLayerEditor();
+/* Sélection multiple : selLayer reste le calque « principal » (celui dont le
+   panneau 4 affiche les réglages), selIds contient l'ensemble sélectionné.
+   Cmd/Ctrl + clic ajoute ou retire, Maj + clic prend la plage. Supprimer,
+   dupliquer, copier en miroir et le déplacement à la souris s'appliquent à
+   tout l'ensemble. */
+let selIds=new Set();
+function selectionCourante(){
+  const s=layers.filter(l=>selIds.has(l.id));
+  if(s.length) return s;
+  const l=layers[selLayer];
+  return l?[l]:[];
+}
+function selectLayer(i, mode){
   const l=layers[i];
-  if(l){ placeSelRing(l); $('hudSel').innerHTML='<b>'+l.name+'</b> · '+l.size.toFixed(1)+' cm'; }
+  if(mode==='toggle' && l){
+    if(selIds.has(l.id) && selIds.size>1){ selIds.delete(l.id); }
+    else { selIds.add(l.id); }
+    if(!selIds.has(l.id)) selLayer=layers.findIndex(x=>selIds.has(x.id));
+    else selLayer=i;
+  } else if(mode==='range' && l){
+    const a=Math.min(selLayer<0?i:selLayer, i), b=Math.max(selLayer<0?i:selLayer, i);
+    selIds=new Set(layers.slice(a,b+1).map(x=>x.id));
+    selLayer=i;
+  } else {
+    selLayer=i; selIds = l ? new Set([l.id]) : new Set();
+  }
+  renderLayers(); loadLayerEditor();
+  const cur=layers[selLayer];
+  if(cur){ placeSelRing(cur);
+    $('hudSel').innerHTML = selIds.size>1
+      ? '<b>'+selIds.size+' calques</b> sélectionnés'
+      : '<b>'+cur.name+'</b> · '+cur.size.toFixed(1)+' cm'; }
   else { selRing.visible=false; $('hudSel').textContent='Aucun calque'; }
 }
 function updateLayerInfo(){
@@ -3787,10 +3864,14 @@ canvas.addEventListener('pointerdown', e=>{
   if(hd){
     const id=hd.object.userData.layer, i=layers.findIndex(l=>l.id===id);
     if(i<0) return;
-    selectLayer(i);
+    // Un calque déjà dans la sélection multiple : on garde l'ensemble pour
+    // le déplacer d'un bloc, au lieu de le réduire au seul calque cliqué.
+    const dejaSel = selIds.has(layers[i].id) && selIds.size>1;
+    if(!dejaSel) selectLayer(i);
     const l=layers[i];
     const kind = e.altKey ? 'rot' : (e.shiftKey ? 'scale' : 'move');
-    drag={l, kind, sx:e.clientX, sy:e.clientY, r0:l.rot, s0:l.size};
+    drag={l, kind, sx:e.clientX, sy:e.clientY, r0:l.rot, s0:l.size,
+          groupe: dejaSel ? selectionCourante() : [l]};
     controls.enabled=false; canvas.setPointerCapture(e.pointerId);
     canvas.classList.add('grabbing');
   }
@@ -3804,10 +3885,28 @@ canvas.addEventListener('pointermove', e=>{
   const l=drag.l;
   if(drag.kind==='move'){
     const h=hitBody();
-    if(h){ l.pos.copy(h.point); l.normal.copy(worldNormal(h)); l.mesh=h.object;
-           l.canon=l.pos.clone().applyMatrix4(anatXformInv); l.canonN=l.normal.clone();
-           l.norm=versNorm(l.canon, familleModele());
-           l.region=regionOf(depuisNorm(l.norm,'anat')); l.offView=false; needRebuild=l; }
+    if(h){
+      // Sélection multiple : on applique le même déplacement aux autres
+      // calques retenus, chacun étant ensuite replaqué sur la peau.
+      const suite=(drag.groupe||[]).filter(o=>o!==l);
+      const delta=h.point.clone().sub(l.pos);
+      l.pos.copy(h.point); l.normal.copy(worldNormal(h)); l.mesh=h.object;
+      l.canon=l.pos.clone().applyMatrix4(anatXformInv); l.canonN=l.normal.clone();
+      l.norm=versNorm(l.canon, familleModele());
+      l.region=regionOf(depuisNorm(l.norm,'anat')); l.offView=false; needRebuild=l;
+      if(suite.length && delta.lengthSq()>1e-10){
+        suite.forEach(o=>{
+          const cible=o.pos.clone().add(delta);
+          const s=surfaceLaPlusProche(cible, refNorm(familleModele()).h*0.35);
+          if(!s) return;
+          o.pos.copy(s.point); o.normal.copy(s.normal); o.mesh=s.mesh;
+          o.canon=o.pos.clone().applyMatrix4(anatXformInv); o.canonN=o.normal.clone();
+          o.norm=versNorm(o.canon, familleModele());
+          o.region=regionOf(depuisNorm(o.norm,'anat')); o.offView=false;
+          rebuildDecal(o);
+        });
+      }
+    }
   } else if(drag.kind==='rot'){
     l.rot = ((drag.r0 + (e.clientX-drag.sx)*0.6 + 540) % 360) - 180;
     needRebuild=l; setCtl('tRot',l.rot);
@@ -4010,6 +4109,11 @@ const LEGACY_KIND={bras:'arm', jambe:'male', corps:'male'};
 function syncModelRows(){
   const isArm = modelKind==='bras' || modelKind==='arm';
   const real  = !!ANAT;
+  // Panneau de droite contextuel : morphologie sur un membre isolé,
+  // animations sur un corps entier — jamais les deux, jamais aucun.
+  const corps = modelKind==='corps3d';
+  if($('gModel')) $('gModel').hidden = corps;
+  if($('gAnim'))  $('gAnim').hidden  = !corps;
   $('rowPose').style.display = (isArm && !real) ? '' : 'none';
   $('rowSide').style.display = (modelKind==='bras'||modelKind==='jambe'||modelKind==='arm') ? '' : 'none';
   // Sans anatomie réelle, poseFingers ne peut rien faire : mieux vaut retirer
@@ -4171,9 +4275,17 @@ $$('#inkChips .chip').forEach(c=>c.addEventListener('click',()=>{
 }));
 ['tSize','tRot','tDepth','tAspect','tOpacity','tHealed','tFresh','tRelief']
   .forEach(id=>$(id).addEventListener('change',pushHistory));
-$('btnDup').addEventListener('click',()=>{ const l=layers[selLayer]; if(l) duplicateLayer(l); });
-$('btnMirror').addEventListener('click',()=>{ const l=layers[selLayer]; if(l) mirrorLayer(l); });
-$('btnDel').addEventListener('click',()=>{ const l=layers[selLayer]; if(l) deleteLayer(l); });
+$('btnDup').addEventListener('click',()=>{ const s=selectionCourante(); s.forEach(duplicateLayer);
+  if(s.length>1) toast(s.length+' calques dupliqués'); });
+$('btnMirror').addEventListener('click',()=>{ const s=selectionCourante(); s.forEach(mirrorLayer);
+  if(s.length>1) toast(s.length+' copies miroir'); });
+$('btnDel').addEventListener('click',()=>{
+  const s=selectionCourante(); if(!s.length) return;
+  s.forEach(l=>deleteLayer(l,true));
+  selIds.clear(); selLayer=Math.min(selLayer, layers.length-1);
+  renderLayers(); loadLayerEditor(); pushHistory();
+  toast(s.length>1 ? s.length+' calques supprimés' : 'Calque supprimé');
+});
 
 // --- lumières
 $('lightPreset').addEventListener('change',e=>{ applyPreset(e.target.value); toast('Ambiance : '+e.target.selectedOptions[0].text); });
@@ -4279,9 +4391,20 @@ $('btnRedo').addEventListener('click',redo);
   const modelTabs = $('modelTabs'), corpsSubTabs = $('corpsSubTabs'), mobMenu = $('mobMenu');
   const ancreModel = document.createComment('modelTabs'); modelTabs.after(ancreModel);
   const ancreCorps = document.createComment('corpsSubTabs'); corpsSubTabs.after(ancreCorps);
+  // La barre d'animations est ancrée dans le panneau de droite sur grand
+  // écran et repasse au-dessus de la scène sur mobile, où elle devient un
+  // bandeau transparent posé juste au-dessus de la barre Naviguer/Placer.
+  const animBar=$('animBar'), animSlot=$('animSlot'), stage=$('stage');
   function placer(mobile){
-    if(mobile){ mobMenu.appendChild(modelTabs); mobMenu.appendChild(corpsSubTabs); }
-    else{ ancreModel.after(modelTabs); ancreCorps.after(corpsSubTabs); }
+    if(mobile){
+      mobMenu.appendChild(modelTabs); mobMenu.appendChild(corpsSubTabs);
+      if(animBar.parentNode!==stage) stage.appendChild(animBar);
+      animBar.classList.remove('docked');
+    } else {
+      ancreModel.after(modelTabs); ancreCorps.after(corpsSubTabs);
+      if(animBar.parentNode!==animSlot) animSlot.appendChild(animBar);
+      animBar.classList.add('docked');
+    }
   }
   placer(mq.matches);
   mq.addEventListener('change', e=>placer(e.matches));
@@ -4906,8 +5029,8 @@ addEventListener('keydown', e=>{
   if(/input|select|textarea/i.test(e.target.tagName)) return;
   const k=e.key.toLowerCase();
   if((e.metaKey||e.ctrlKey) && k==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
-  if(k==='delete'||k==='backspace'){ const l=layers[selLayer]; if(l){ e.preventDefault(); deleteLayer(l); } }
-  else if(k==='d'){ const l=layers[selLayer]; if(l) duplicateLayer(l); }
+  if(k==='delete'||k==='backspace'){ if(layers[selLayer]){ e.preventDefault(); $('btnDel').click(); } }
+  else if(k==='d'){ selectionCourante().forEach(duplicateLayer); }
   else if(k==='m') setMode('orbit');
   else if(k==='v') setMode('place');
   else if(k==='f') fitView();

@@ -105,6 +105,9 @@ button,.chip,.sw,.gitem,.layer,.ic,.seg button,.seg2 button{touch-action:manipul
 #animBar.docked{position:static;transform:none;left:auto;bottom:auto;
   background:none;border:0;box-shadow:none;padding:0;max-width:none;
   display:flex;flex-wrap:wrap;gap:6px;width:100%}
+/* Pause tient toute la largeur en tête : c'est l'état de repos, celui où
+   l'on pose les motifs. Les quatre animations suivent, deux par ligne. */
+#animBar.docked button[data-a="__stop"]{flex:1 1 100%}
 #animBar.docked button{flex:1 1 44%;background:var(--elev1);border:1px solid var(--line);
   color:var(--txt2);border-radius:8px;padding:9px 6px;font-size:11.5px}
 #animBar.docked button:hover{color:var(--txt);background:var(--elev2)}
@@ -813,10 +816,17 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <b>Z</b><span>Zoomer sur le calque sélectionné</span>
     <b>M / V</b><span>Naviguer · Placer</span>
   </div>
+  <h4>Les deux modes</h4>
+  <p><b>Naviguer</b> sert uniquement à regarder : on tourne autour du modèle,
+  on zoome, rien n'entoure les tatouages. <b>Placer</b> sert à travailler :
+  cliquer sur la peau pose le motif choisi, et cliquer sur un tatouage
+  existant le sélectionne pour le déplacer — l'anneau s'allume dès que le
+  curseur le survole.</p>
   <h4>Poser un tatouage</h4>
   <div class="kb">
     <b>Glisser-déposer</b><span>Importer des PNG/JPG dans la galerie</span>
-    <b>Clic sur le corps</b><span>Poser le motif sélectionné (mode Placer)</span>
+    <b>Clic sur la peau</b><span>Poser le motif sélectionné (mode Placer)</span>
+    <b>Clic sur un tatouage</b><span>Le sélectionner puis le déplacer (mode Placer)</span>
     <b>Glisser un calque</b><span>Le déplacer sur la peau, il épouse le relief</span>
     <b>Alt + glisser</b><span>Faire pivoter le calque</span>
     <b>Maj + glisser</b><span>Redimensionner le calque</span>
@@ -1987,17 +1997,28 @@ function grainCorps(){
   _grainCorps.anisotropy=8;
   return _grainCorps;
 }
+/* Les corps entiers sont bien moins denses que le corps procédural : le
+   torse de Female ne fait que 5 551 triangles. Sur un maillage aussi large,
+   un spéculaire marqué et une diffusion sous-cutanée forte transforment la
+   moindre ondulation de normale en plaques brillantes — ce sont les reflets
+   étranges vus sur ses hanches et ses cuisses. On leur donne donc leur
+   propre réglage, plus mat et plus sobre, sans toucher à Bras et Jambe.
+   La direction et la couleur restent partagées : elles suivent l'éclairage. */
+const sssCorps = {
+  uSSSAmount:{value:0.10}, uSSSPower:sssUniforms.uSSSPower,
+  uSSSColor:sssUniforms.uSSSColor, uSSSDir:sssUniforms.uSSSDir
+};
 let _matCorps=null;
 function matPeauCorps(){
   if(_matCorps) return _matCorps;
   _matCorps=new THREE.MeshPhysicalMaterial({
     color:new THREE.Color(SKIN_TONES[skinToneIdx]),
-    map:grainCorps(), roughness:0.62, metalness:0.0,
-    sheen:0.45, sheenRoughness:0.85, sheenColor:new THREE.Color(0xffc8ae),
-    clearcoat:0.06, clearcoatRoughness:0.6, side:THREE.FrontSide
+    map:grainCorps(), roughness:0.80, metalness:0.0,
+    sheen:0.18, sheenRoughness:0.95, sheenColor:new THREE.Color(0xffc8ae),
+    clearcoat:0.0, clearcoatRoughness:0.6, side:THREE.FrontSide
   });
   _matCorps.onBeforeCompile = (sh)=>{
-    Object.assign(sh.uniforms, sssUniforms);
+    Object.assign(sh.uniforms, sssCorps);
     sh.fragmentShader = sh.fragmentShader
       .replace('void main() {', `
         uniform float uSSSAmount; uniform float uSSSPower;
@@ -2015,7 +2036,7 @@ function matPeauCorps(){
           gl_FragColor.rgb += uSSSColor * diffuseColor.rgb * amt;
         }`);
   };
-  _matCorps.customProgramCacheKey = ()=>'skin-sss';
+  _matCorps.customProgramCacheKey = ()=>'skin-sss-corps';
   return _matCorps;
 }
 /** La carnation et le sébum pilotent aussi les corps entiers. */
@@ -2026,8 +2047,9 @@ function majPeauCorps(){
   const hsl={}; base.getHSL(hsl);
   base.setHSL(clamp(hsl.h+tint*0.045,0,1), clamp(hsl.s*(1+tint*0.55),0,1), clamp(hsl.l*(1-tint*0.10),0,1));
   _matCorps.color.copy(base);
-  _matCorps.roughness = lerp(0.70,0.44,oil);
-  _matCorps.clearcoat = lerp(0.02,0.12,oil);
+  _matCorps.roughness = lerp(0.86,0.62,oil);
+  _matCorps.clearcoat = lerp(0.0,0.05,oil);
+  sssCorps.uSSSAmount.value = gv('mSSS')/100*0.20;
   markDirty();
 }
 
@@ -3485,7 +3507,7 @@ const DEF_LAYER = {size:12, rot:0, depth:14, aspect:100, opacity:92, healed:18, 
 
 const selRing = new THREE.Mesh(
   new THREE.RingGeometry(0.5,0.512,72),
-  new THREE.MeshBasicMaterial({color:0xe8503a, transparent:true, opacity:0.55, side:THREE.DoubleSide,
+  new THREE.MeshBasicMaterial({color:0x5b7cfa, transparent:true, opacity:0.42, side:THREE.DoubleSide,
     depthTest:false, toneMapped:false}));
 selRing.renderOrder=999; selRing.visible=false; scene.add(selRing);
 
@@ -3664,12 +3686,27 @@ function rebuildDecal(l){
   });
   if(selLayer>=0 && layers[selLayer]===l) placeSelRing(l);
 }
+/* L'anneau n'existe qu'en mode Placer : en mode Naviguer on regarde le
+   modèle, rien ne doit l'entourer. En Placer il montre le calque visé —
+   franc et lumineux quand le curseur le survole, discret sinon. */
+let calqueSurvole=null;
 function placeSelRing(l){
+  if(mode!=='place' || !l){ selRing.visible=false; return; }
   selRing.visible=true;
   selRing.position.copy(l.pos).addScaledVector(l.normal, 0.004);
   selRing.quaternion.copy(layerBasis(l));
   const w=l.size/100, h=w/(l.imgAspect||1)*(l.aspect/100);
-  selRing.scale.setScalar(Math.max(w,h)*0.62/0.5*0.86);
+  const survol = calqueSurvole===l.id;
+  selRing.scale.setScalar(Math.max(w,h)*0.62/0.5*(survol?0.95:0.86));
+  selRing.material.opacity = survol ? 0.95 : 0.42;
+  selRing.material.color.set(survol ? 0x8fa6ff : 0x5b7cfa);
+}
+/** Anneau à afficher : le calque survolé s'il y en a un, sinon le sélectionné. */
+function majAnneau(){
+  if(mode!=='place'){ selRing.visible=false; markDirty(); return; }
+  const surv = calqueSurvole ? layers.find(l=>l.id===calqueSurvole) : null;
+  placeSelRing(surv || layers[selLayer]);
+  markDirty();
 }
 function addLayer(flashId, pos, normal, mesh){
   const f=flashes.find(x=>x.id===flashId); if(!f) return null;
@@ -3684,6 +3721,7 @@ function addLayer(flashId, pos, normal, mesh){
   l.canon = pos.clone().applyMatrix4(anatXformInv);
   l.canonN = normal.clone();
   l.norm = versNorm(l.canon, familleModele());
+  l.anc  = ancrerSurSquelette(pos);
   l.region = regionOf(depuisNorm(l.norm,'anat'));
   layers.push(l);
   refreshLayerMaterial(l);
@@ -3823,7 +3861,7 @@ let hist=[], histAt=-1, histLock=false;
 function serializeLayers(){
   return layers.map(l=>({id:l.id, flash:l.flash, name:l.name, p:l.pos.toArray(), n:l.normal.toArray(),
     cp:l.canon?l.canon.toArray():null, cn:l.canonN?l.canonN.toArray():null, rg:l.region||null,
-    nm:l.norm?l.norm.toArray():null,
+    nm:l.norm?l.norm.toArray():null, anc:l.anc||null,
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked, visible:l.visible}));
 }
@@ -3836,7 +3874,7 @@ function restoreLayers(arr){
       normal:new THREE.Vector3().fromArray(s.n),
       canon:s.cp?new THREE.Vector3().fromArray(s.cp):null,
       canonN:s.cn?new THREE.Vector3().fromArray(s.cn):null, region:s.rg||null,
-      norm:s.nm?new THREE.Vector3().fromArray(s.nm):null,
+      norm:s.nm?new THREE.Vector3().fromArray(s.nm):null, anc:s.anc||null,
       meshes:[], tex:null, bump:null, mat:null, mesh:null});
     delete l.p; delete l.n; delete l.cp; delete l.cn; delete l.rg; delete l.nm;
     layers.push(l); refreshLayerMaterial(l);
@@ -3866,9 +3904,11 @@ function setMode(m){
   mode=m;
   $$('#modeTabs button').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
   canvas.classList.toggle('place', m==='place');
+  if(m!=='place'){ calqueSurvole=null; canvas.style.cursor=''; }
+  majAnneau();
   $('hudTip').textContent = m==='place'
-    ? 'Cliquez sur le corps pour poser le motif · glissez pour l’ajuster'
-    : 'Clic gauche : orbiter · Molette : zoom · Clic droit : translater · Glisser un tatouage pour le déplacer';
+    ? 'Cliquez sur la peau pour poser le motif · cliquez un tatouage pour le sélectionner et le déplacer'
+    : 'Clic gauche : orbiter · Molette : zoom · Clic droit : translater';
 }
 const ray=new THREE.Raycaster(), ptr=new THREE.Vector2();
 let drag=null, needRebuild=null;
@@ -3900,17 +3940,22 @@ canvas.addEventListener('pointerdown', e=>{
   if(e.button!==0) return;
   if(tcontrol.dragging) return;
   setPtr(e);
-  if(mode==='place'){
+  // Naviguer : la scène se manipule, on ne touche pas aux calques.
+  if(mode!=='place') return;
+  // Placer : si le curseur est sur un tatouage, on le prend pour le déplacer ;
+  // sinon on en pose un nouveau sur la peau.
+  const surDecal=hitDecal();
+  if(!surDecal){
     const h=hitBody();
     if(!h) return;
     if(selFlash<0){ toast('Importez et sélectionnez d’abord un motif', true); return; }
     const l=addLayer(flashes[selFlash].id, h.point, worldNormal(h), h.object);
-    if(l){ drag={l, kind:'move', sx:e.clientX, sy:e.clientY, r0:l.rot, s0:l.size};
+    if(l){ drag={l, kind:'move', sx:e.clientX, sy:e.clientY, r0:l.rot, s0:l.size, groupe:[l]};
       controls.enabled=false; canvas.setPointerCapture(e.pointerId); }
     return;
   }
-  const hd=hitDecal();
-  if(hd){
+  const hd=surDecal;
+  {
     const id=hd.object.userData.layer, i=layers.findIndex(l=>l.id===id);
     if(i<0) return;
     // Un calque déjà dans la sélection multiple : on garde l'ensemble pour
@@ -3927,7 +3972,13 @@ canvas.addEventListener('pointerdown', e=>{
 });
 canvas.addEventListener('pointermove', e=>{
   if(!drag){
-    if(mode==='orbit'){ setPtr(e); canvas.style.cursor = hitDecal()?'move':''; }
+    if(mode==='place'){
+      setPtr(e);
+      const hd=hitDecal();
+      const id=hd ? hd.object.userData.layer : null;
+      canvas.style.cursor = hd ? 'move' : 'crosshair';
+      if(id!==calqueSurvole){ calqueSurvole=id; majAnneau(); }
+    } else if(calqueSurvole!==null){ calqueSurvole=null; majAnneau(); }
     return;
   }
   setPtr(e);
@@ -3942,6 +3993,7 @@ canvas.addEventListener('pointermove', e=>{
       l.pos.copy(h.point); l.normal.copy(worldNormal(h)); l.mesh=h.object;
       l.canon=l.pos.clone().applyMatrix4(anatXformInv); l.canonN=l.normal.clone();
       l.norm=versNorm(l.canon, familleModele());
+      l.anc=ancrerSurSquelette(l.pos);
       l.region=regionOf(depuisNorm(l.norm,'anat')); l.offView=false; needRebuild=l;
       if(suite.length && delta.lengthSq()>1e-10){
         suite.forEach(o=>{
@@ -3951,6 +4003,7 @@ canvas.addEventListener('pointermove', e=>{
           o.pos.copy(s.point); o.normal.copy(s.normal); o.mesh=s.mesh;
           o.canon=o.pos.clone().applyMatrix4(anatXformInv); o.canonN=o.normal.clone();
           o.norm=versNorm(o.canon, familleModele());
+          o.anc=ancrerSurSquelette(o.pos);
           o.region=regionOf(depuisNorm(o.norm,'anat')); o.offView=false;
           rebuildDecal(o);
         });
@@ -4051,6 +4104,95 @@ function depuisNorm(n, fam){
   const r=refNorm(fam);
   return new THREE.Vector3(n.x*r.h, n.y*r.h+r.y0, n.z*r.h);
 }
+/* ---------- Ancrage sur le squelette ------------------------------------
+   Repérer un tatouage à une fraction de la stature suffisait à le mettre
+   sur le bon membre, mais pas au bon endroit du membre : Super a les bras
+   courts et les épaules très larges, si bien qu'un motif d'avant-bras
+   atterrissait sur son deltoïde. On l'ancre donc sur l'os : quel segment
+   (avant-bras gauche, cuisse droite…), à quelle fraction de sa longueur,
+   à quel angle autour de lui. Un milieu d'avant-bras reste un milieu
+   d'avant-bras sur n'importe quelle morphologie. */
+const SEGMENTS=[
+  ['brasL_h','epauleL','coudeL'], ['brasL_b','coudeL','mainL'],
+  ['brasR_h','epauleR','coudeR'], ['brasR_b','coudeR','mainR'],
+  ['jambeL_h','hancheL','genouL'], ['jambeL_b','genouL','chevilleL'],
+  ['jambeR_h','hancheR','genouR'], ['jambeR_b','genouR','chevilleR'],
+  ['tronc','bassin','cou'], ['tete','cou','tete']
+];
+/** Points d'articulation du modèle affiché, en repère monde. */
+function jointsModele(){
+  const J={};
+  if(modelKind==='corps3d'){
+    // On balaie tout le sous-arbre plutôt que le squelette d'un seul maillage :
+    // Female arrive en quatre maillages, chacun n'étant lié qu'aux os de sa
+    // partie (celui de la tête ignore les bras), et three.js suffixe les
+    // doublons de noms (mixamorigLeftArm_2). Sans ça, coude et main
+    // restaient introuvables et le motif remontait vers la tête.
+    const par={};
+    root.traverse(o=>{
+      if(!o.isBone) return;
+      const n=o.name.replace(/^mixamorig:?/i,'').replace(/_\d+$/,'').toLowerCase();
+      if(!par[n]) par[n]=o;
+    });
+    const P=n=>{ const b=par[n]; if(!b) return null; b.updateMatrixWorld(true);
+      return new THREE.Vector3().setFromMatrixPosition(b.matrixWorld); };
+    J.epauleL=P('leftarm');   J.coudeL=P('leftforearm');  J.mainL=P('lefthand');
+    J.epauleR=P('rightarm');  J.coudeR=P('rightforearm'); J.mainR=P('righthand');
+    J.hancheL=P('leftupleg'); J.genouL=P('leftleg');      J.chevilleL=P('leftfoot');
+    J.hancheR=P('rightupleg');J.genouR=P('rightleg');     J.chevilleR=P('rightfoot');
+    J.bassin=P('hips');       J.cou=P('neck');            J.tete=P('head');
+  } else if(ANAT){
+    const A=ANAT.joints;
+    const P=n=>A[n]?new THREE.Vector3(...A[n]).applyMatrix4(anatXform):null;
+    J.epauleL=P('l-shoulder');  J.coudeL=P('l-elbow');  J.mainL=P('l-hand');
+    J.epauleR=P('r-shoulder');  J.coudeR=P('r-elbow');  J.mainR=P('r-hand');
+    J.hancheL=P('l-upper-leg'); J.genouL=P('l-knee');   J.chevilleL=P('l-ankle');
+    J.hancheR=P('r-upper-leg'); J.genouR=P('r-knee');   J.chevilleR=P('r-ankle');
+    J.bassin=P('pelvis');       J.cou=P('neck');        J.tete=P('head');
+  }
+  return J;
+}
+/** Repère orthonormé autour d'un axe, stable d'un modèle à l'autre :
+ *  la référence est la verticale, sauf pour un segment déjà vertical. */
+function repereAutour(axe){
+  const ref = Math.abs(axe.y)>0.85 ? new THREE.Vector3(0,0,1) : new THREE.Vector3(0,1,0);
+  const u=new THREE.Vector3().crossVectors(ref,axe).normalize();
+  const v=new THREE.Vector3().crossVectors(axe,u).normalize();
+  return {u,v};
+}
+function ancrerSurSquelette(pos){
+  const J=jointsModele();
+  let best=null;
+  SEGMENTS.forEach(([id,a,b])=>{
+    const A=J[a], B=J[b]; if(!A||!B) return;
+    const ab=new THREE.Vector3().subVectors(B,A);
+    const L2=ab.lengthSq(); if(L2<1e-9) return;
+    const t=clamp(new THREE.Vector3().subVectors(pos,A).dot(ab)/L2, 0, 1);
+    const proj=A.clone().addScaledVector(ab,t);
+    const d=proj.distanceTo(pos);
+    if(!best || d<best.d) best={id,t,d,A,ab,proj};
+  });
+  if(!best) return null;
+  const L=best.ab.length();
+  const axe=best.ab.clone().divideScalar(L);
+  const {u,v}=repereAutour(axe);
+  const rad=new THREE.Vector3().subVectors(pos,best.proj);
+  return {seg:best.id, t:best.t, ang:Math.atan2(rad.dot(v), rad.dot(u)), r:rad.length()/L};
+}
+/** Reconstruit la position visée sur le modèle courant. */
+function pointDepuisAncre(anc){
+  const J=jointsModele();
+  const s=SEGMENTS.find(x=>x[0]===anc.seg); if(!s) return null;
+  const A=J[s[1]], B=J[s[2]]; if(!A||!B) return null;
+  const ab=new THREE.Vector3().subVectors(B,A);
+  const L=ab.length(); if(L<1e-9) return null;
+  const axe=ab.clone().divideScalar(L);
+  const {u,v}=repereAutour(axe);
+  const proj=A.clone().addScaledVector(ab,anc.t);
+  const dir=u.clone().multiplyScalar(Math.cos(anc.ang)).addScaledVector(v,Math.sin(anc.ang));
+  return {axe:proj, dir, cible:proj.clone().addScaledVector(dir, anc.r*L), longueur:L};
+}
+
 /** Point de peau le plus proche d'une cible, sur le corps actuellement
  *  affiché. Sert de filet quand le report d'un modèle à l'autre ne tombe
  *  pas exactement sur la surface : les proportions diffèrent (Super est
@@ -4121,29 +4263,46 @@ function resnapLayers(){
     if(l.norm && !viewShows(l.region)){        // membre non affiché : on conserve tel quel
       l.offView=true; rebuildDecal(l); return;
     }
-    // Position attendue sur le modèle courant, déduite de la stature.
-    if(l.norm){
+    let pose=false;
+    // 1) Ancrage sur l'os : on vise le bon point du bon segment, puis on
+    //    revient vers l'axe du membre pour se poser exactement sur la peau.
+    //    C'est ce qui garde un motif d'avant-bras sur l'avant-bras, quelles
+    //    que soient les proportions du modèle.
+    if(l.anc){
+      const p=pointDepuisAncre(l.anc);
+      if(p){
+        const depart=p.axe.clone().addScaledVector(p.dir, p.longueur*1.6);
+        ray.set(depart, p.dir.clone().negate());
+        const h=ray.intersectObjects(bodyMeshes,false);
+        if(h.length){
+          l.pos.copy(h[0].point); l.normal.copy(worldNormal(h[0])); l.mesh=h[0].object;
+          l.offView=false; pose=true;
+        } else {
+          const s=surfaceLaPlusProche(p.cible, p.longueur*0.9);
+          if(s){ l.pos.copy(s.point); l.normal.copy(s.normal); l.mesh=s.mesh;
+                 l.offView=false; pose=true; }
+        }
+      }
+    }
+    // 2) Repli : anciens calques sans ancrage osseux (projets déjà
+    //    enregistrés), on retombe sur la position en fraction de stature.
+    if(!pose && l.norm){
       const cible=depuisNorm(l.norm, fam);
       l.pos.copy(fam==='corps3d' ? cible : cible.clone().applyMatrix4(anatXform));
       if(l.canonN) l.normal.copy(l.canonN);
+      const o=l.pos.clone().addScaledVector(l.normal, OUT);
+      ray.set(o, l.normal.clone().negate());
+      const h=ray.intersectObjects(bodyMeshes,false);
+      if(h.length && Math.abs(h[0].distance-OUT)<0.10){
+        l.pos.copy(h[0].point); l.normal.copy(worldNormal(h[0])); l.mesh=h[0].object;
+        l.offView=false; pose=true;
+      } else {
+        const s=surfaceLaPlusProche(l.pos, refNorm(fam).h*0.35);
+        if(s){ l.pos.copy(s.point); l.normal.copy(s.normal); l.mesh=s.mesh;
+               l.offView=false; pose=true; }
+      }
     }
-    const o=l.pos.clone().addScaledVector(l.normal, OUT);
-    ray.set(o, l.normal.clone().negate());
-    const h=ray.intersectObjects(bodyMeshes,false);
-    if(h.length && Math.abs(h[0].distance-OUT)<0.10){
-      l.pos.copy(h[0].point); l.normal.copy(worldNormal(h[0])); l.mesh=h[0].object;
-      l.offView=false;
-    } else {
-      // Report d'un modèle à l'autre : les proportions ne coïncident pas
-      // (Super est bien plus large que Female), le rayon rate donc souvent la
-      // peau. On accroche alors le point de peau le plus proche — le motif
-      // atterrit au bon endroit anatomique au lieu de disparaître.
-      const s=surfaceLaPlusProche(l.pos, refNorm(fam).h*0.35);
-      if(s){
-        l.pos.copy(s.point); l.normal.copy(s.normal); l.mesh=s.mesh;
-        l.offView=false;
-      } else l.offView=true;
-    }
+    if(!pose) l.offView=true;
     if(!l.offView){
       l.canon  = l.pos.clone().applyMatrix4(anatXformInv);
       l.canonN = l.normal.clone();
@@ -5217,6 +5376,7 @@ ldProgress(.6,'Construction de l’anatomie…');
     get flashes(){return flashes;}, get bodyMeshes(){return bodyMeshes;}, buildModel, fitView, setView,
     get ANAT(){return ANAT;}, poseFingers, morphWeights, anatGeometry, syncLight, skinMats, refreshSkinMaps, loadFiles, addFlash, adoptModel, deformImported, localProxy, setMode, addLayer, selectLayer, rebuildDecal, resnapLayers,
     get mixer(){return mixer;}, get clipCourant(){return clipCourant;}, get peauxSkinned(){return peauxSkinned;}, get corpsActif(){return corpsActif;},
+    ancrerSurSquelette, pointDepuisAncre, jointsModele,
     render:()=>renderer.render(scene,camera)};
   if(/[?&]demo/.test(location.search)) loadSample(true);
   setTimeout(()=>{ $('loader').classList.add('gone');

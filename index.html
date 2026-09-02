@@ -302,7 +302,9 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   html,body{overflow:hidden}
   #app{grid-template-columns:1fr;grid-template-rows:var(--hdr) 1fr;height:100dvh}
   #stage{grid-column:1;grid-row:2;width:100%;height:100%}
-  #topbar{gap:8px;padding:0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+  /* La pastille du modèle est fixe en haut à droite : on réserve sa place
+     pour que le contenu défilant du bandeau ne passe jamais dessous. */
+  #topbar{gap:8px;padding:0 106px 0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   #topbar::-webkit-scrollbar{display:none}
   #topbar .logo{font-size:10.5px;letter-spacing:1px}
   #modeTabs{display:none}
@@ -321,10 +323,15 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
                -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
   body.mob-left-open #mobBackdrop,body.mob-right-open #mobBackdrop,body.mob-menu-open #mobBackdrop{display:block}
 
-  #mobMenuBtn{display:flex;align-items:center;justify-content:center;
-    position:fixed;top:7px;right:8px;z-index:66;
-    width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
-    background:var(--elev1);color:var(--txt);font-size:15px}
+  /* Le modèle courant est écrit en toutes lettres : on voit ce qu'on regarde
+     et qu'on peut en changer, ce qu'un simple ☰ ne disait pas. */
+  #mobMenuBtn{display:flex;align-items:center;gap:5px;
+    position:fixed;top:6px;right:8px;z-index:66;
+    height:34px;padding:0 11px;border-radius:17px;border:1px solid var(--line);
+    background:var(--elev1);color:var(--txt);font-size:12.5px;font-weight:600}
+  #mobMenuBtn .fl{color:var(--acc);font-size:10px}
+  body.mob-menu-open #mobMenuBtn{background:var(--acc);border-color:var(--acc);color:#fff}
+  body.mob-menu-open #mobMenuBtn .fl{color:#fff}
   #mobMenu{display:flex;flex-direction:column;gap:10px;position:fixed;left:8px;right:8px;
     top:calc(var(--hdr) + 6px);z-index:65;background:var(--panel2);
     border:1px solid var(--line);border-radius:12px;padding:12px;
@@ -333,20 +340,31 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     transition:.18s}
   body.mob-menu-open #mobMenu{transform:none;opacity:1;pointer-events:auto}
   #mobMenu .mm-h{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt3)}
+  #mobModelSlot{display:flex;flex-direction:column;gap:8px}
   #mobMenu #modelTabs,#mobMenu #corpsSubTabs{width:100%}
-  #mobMenu #modelTabs button,#mobMenu #corpsSubTabs button{flex:1}
+  #mobMenu #modelTabs button,#mobMenu #corpsSubTabs button{flex:1;padding:9px 6px}
   #mobMenu .mm-row{display:flex;gap:6px;flex-wrap:wrap}
+  #mobMenu .mm-row .tb{flex:1 1 30%;justify-content:center;height:38px}
+  #topbar{padding-right:120px}
+  #btnCompte{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+  /* Pile d'actions : un bouton principal (ajouter un motif) et deux
+     secondaires de même gabarit, alignés sur le même axe et espacés
+     régulièrement — ils se chevauchaient et n'avaient pas de rapport de
+     taille cohérent. */
   #fabAdd,#mobLayersBtn,#mobSettingsBtn{
     display:flex;align-items:center;justify-content:center;position:fixed;z-index:55;
-    right:12px;border-radius:50%;background:var(--acc);color:#fff;border:0;
-    box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer}
-  #fabAdd{width:52px;height:52px;font-size:26px;font-weight:300;
-    bottom:calc(66px + env(safe-area-inset-bottom))}
-  #mobLayersBtn,#mobSettingsBtn{width:40px;height:40px;background:var(--elev2);color:var(--txt)}
-  #mobLayersBtn svg,#mobSettingsBtn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7}
-  #mobLayersBtn{bottom:calc(126px + env(safe-area-inset-bottom))}
-  #mobSettingsBtn{bottom:calc(178px + env(safe-area-inset-bottom))}
+    border-radius:50%;border:0;cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.28)}
+  #fabAdd{width:54px;height:54px;font-size:27px;font-weight:300;line-height:1;
+    right:14px;bottom:calc(74px + env(safe-area-inset-bottom));
+    background:var(--acc);color:#fff}
+  #mobLayersBtn,#mobSettingsBtn{width:42px;height:42px;right:20px;
+    background:var(--glass);color:var(--txt);border:1px solid var(--line);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  #mobLayersBtn svg,#mobSettingsBtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7}
+  #mobLayersBtn{bottom:calc(138px + env(safe-area-inset-bottom))}
+  #mobSettingsBtn{bottom:calc(188px + env(safe-area-inset-bottom))}
 
   /* barre du bas : Naviguer / Placer, réutilise #modeTabs déplacé ici en CSS pur */
   body #modeTabs.mob-bar{
@@ -356,11 +374,23 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   }
   body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:11px 0;font-size:12.5px}
 
-  #hud{bottom:calc(70px + env(safe-area-inset-bottom));max-width:60vw}
+  #hud{bottom:calc(112px + env(safe-area-inset-bottom));max-width:52vw}
   #hudTip{display:none} /* instructions souris, sans objet au toucher */
+  #hudFps{display:none}
   #viewbtns{top:8px;right:8px}
-  #animBar{bottom:calc(100px + env(safe-area-inset-bottom));max-width:calc(100% - 24px);
-    flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;justify-content:flex-start!important}
+  /* Bandeau d'animations : un vrai pied de page transparent, calé juste
+     au-dessus de Naviguer/Placer, qui ne recouvre plus le modèle ni les
+     pastilles d'état. */
+  #animBar{left:0!important;right:0!important;transform:none!important;
+    bottom:calc(56px + env(safe-area-inset-bottom))!important;max-width:none!important;
+    background:linear-gradient(to top, var(--glass), transparent)!important;
+    border:0!important;box-shadow:none!important;border-radius:0!important;
+    padding:6px 78px 8px 10px!important;   /* place réservée à la pile de boutons */
+    flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    justify-content:flex-start!important;scrollbar-width:none}
+  #animBar::-webkit-scrollbar{display:none}
+  #animBar button{padding:7px 13px;font-size:12px;background:var(--elev1);
+    border:1px solid var(--line);border-radius:16px}
 }
 #btnFull.on{background:var(--acc);border-color:var(--acc);color:#fff}
 
@@ -741,10 +771,13 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
      rapide aux calques et aux réglages, voile de fermeture des tiroirs.
      La barre bas Naviguer/Placer réutilise #modeTabs déjà existant, juste
      repositionné en CSS (voir media query) : aucune duplication d'ID. -->
-<button id="mobMenuBtn" title="Menu">☰</button>
+<button id="mobMenuBtn" title="Changer de modèle"><span id="mobMenuNom">Modèle</span><span class="fl">▾</span></button>
 <div id="mobBackdrop"></div>
 <div id="mobMenu">
   <div class="mm-h">Modèle</div>
+  <div id="mobModelSlot"></div>
+  <div class="mm-h">Projet</div>
+  <div class="mm-row" id="mobActions"></div>
 </div>
 <button id="fabAdd" title="Ajouter un motif">+</button>
 <button id="mobLayersBtn" title="Calques"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 18l9 5 9-5"/></svg></button>
@@ -757,10 +790,17 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <p><b>Bras</b> et <b>Jambe</b> : membre isolé (MakeHuman, domaine public CC0),
   utile pour un tatouage de membre bien cadré. <b>Corps entier</b> : bascule
   entre <b>Male</b>, <b>Female</b> et <b>Super</b>, trois corps animés
-  (marche, course, combat, danse) — pratique pour voir un motif en situation
-  et sous plusieurs poses. Les tatouages posés sur un membre isolé et ceux
-  posés sur un corps entier ne se reportent pas automatiquement de l'un à
-  l'autre : ce sont deux maillages différents. Voir <code>LICENCES.md</code>.</p>
+  (marche, course, combat, danse). Les cinq modèles partagent le même repère
+  anatomique : un motif posé sur l'un se retrouve au bon endroit sur les
+  autres. Voir <code>LICENCES.md</code>.</p>
+  <p>La peau des corps entiers est rendue à partir de la carnation choisie,
+  et non des textures photo livrées avec ces modèles : celles-ci sont des
+  atlas de photogrammétrie dont chaque morceau porte une dominante
+  différente, ce qui plaquait des taches sur le corps.</p>
+  <h4>Panneau de droite</h4>
+  <p>Il change avec le modèle : <b>Morphologie</b> (côté, musculature,
+  corpulence, carnation) sur un membre isolé, <b>Animations</b> sur un corps
+  entier. La carnation s'applique dans les deux cas.</p>
   <h4>Thème</h4>
   <p>Bouton ☾ / ☀ dans la barre du haut, ou <b>Apparence : Sombre / Clair</b> dans
   le panneau « Caméra &amp; rendu », ou la touche <b>T</b>.</p>
@@ -782,9 +822,16 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <b>Maj + glisser</b><span>Redimensionner le calque</span>
     <b>D / Suppr</b><span>Dupliquer · Supprimer</span>
     <b>⇄ sur le calque</b><span>Miroir horizontal, sur place</span>
-    <b>Copier en miroir</b><span>Pose une copie sur le côté opposé du corps</span>
+    <b>Copie miroir</b><span>Pose une copie sur le côté opposé du corps</span>
+    <b>Cmd/Ctrl + clic</b><span>Ajouter ou retirer un calque de la sélection</span>
+    <b>Maj + clic</b><span>Sélectionner toute une plage de calques</span>
     <b>Cmd/Ctrl + Z</b><span>Annuler · Maj pour rétablir</span>
   </div>
+  <p>Supprimer, dupliquer, copier en miroir et le déplacement à la souris
+  s'appliquent à <b>toute la sélection</b> quand plusieurs calques sont
+  retenus. Un tatouage posé sur un modèle se retrouve au même endroit
+  anatomique sur les quatre autres : l'ancrage est mémorisé en proportion
+  de la stature, pas en centimètres.</p>
   <h4>Détourage</h4>
   <p>Automatique au chargement : la luminance devient le canal alpha, seule
   l'encre sombre est conservée puis recolorée (les PNG déjà détourés gardent
@@ -799,10 +846,12 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   actuelle — modèle, calques, réglages — dans <b>« Mes configurations »</b>
   (panneau 3) et de la recharger sur n'importe quel appareil.</p>
   <h4>Mobile</h4>
-  <p>Le modèle occupe tout l'écran. <b>☰</b> ouvre le choix de modèle,
-  <b>+</b> ouvre l'import de motifs, l'icône calques et l'icône réglages
-  ouvrent les panneaux correspondants en tiroir ; la barre du bas bascule
-  Naviguer / Placer.</p>
+  <p>Le modèle occupe tout l'écran. La pastille en haut à droite affiche le
+  modèle affiché et ouvre le choix des cinq modèles ainsi que les actions de
+  projet. <b>+</b> ouvre l'import de motifs, les deux icônes en dessous
+  ouvrent les calques et les réglages en tiroir. La barre du bas bascule
+  Naviguer / Placer, et le bandeau transparent juste au-dessus donne les
+  animations du corps affiché.</p>
   <button class="btn pri" id="btnCloseHelp">Fermer</button>
 </div></div>
 <div id="authModal"><div class="hbox">
@@ -4106,6 +4155,14 @@ function resnapLayers(){
   if(layers[selLayer]) placeSelRing(layers[selLayer]);
 }
 const LEGACY_KIND={bras:'arm', jambe:'male', corps:'male'};
+/** Nom du modèle affiché, écrit sur le bouton mobile de changement. */
+function majNomModele(){
+  const el=$('mobMenuNom'); if(!el) return;
+  const noms={bras:'Bras', arm:'Bras', jambe:'Jambe', glb:'Importé'};
+  el.textContent = modelKind==='corps3d'
+    ? ((CORPS[corpsActif]&&CORPS[corpsActif].nom) || 'Corps')
+    : (noms[modelKind] || 'Modèle');
+}
 function syncModelRows(){
   const isArm = modelKind==='bras' || modelKind==='arm';
   const real  = !!ANAT;
@@ -4114,6 +4171,7 @@ function syncModelRows(){
   const corps = modelKind==='corps3d';
   if($('gModel')) $('gModel').hidden = corps;
   if($('gAnim'))  $('gAnim').hidden  = !corps;
+  majNomModele();
   $('rowPose').style.display = (isArm && !real) ? '' : 'none';
   $('rowSide').style.display = (modelKind==='bras'||modelKind==='jambe'||modelKind==='arm') ? '' : 'none';
   // Sans anatomie réelle, poseFingers ne peut rien faire : mieux vaut retirer
@@ -4395,13 +4453,22 @@ $('btnRedo').addEventListener('click',redo);
   // écran et repasse au-dessus de la scène sur mobile, où elle devient un
   // bandeau transparent posé juste au-dessus de la barre Naviguer/Placer.
   const animBar=$('animBar'), animSlot=$('animSlot'), stage=$('stage');
+  // Actions secondaires : elles encombraient un bandeau déjà trop étroit et
+  // passaient sous la pastille du modèle. Sur mobile elles rejoignent le
+  // menu ; sur grand écran elles reprennent leur place d'origine.
+  const mobActions=$('mobActions');
+  const secondaires=['btnShot','btnSave','btnLoad','btnTheme','btnHelp'].map($).filter(Boolean);
+  const ancres=secondaires.map(el=>{ const a=document.createComment(el.id); el.after(a); return a; });
   function placer(mobile){
     if(mobile){
-      mobMenu.appendChild(modelTabs); mobMenu.appendChild(corpsSubTabs);
+      const slot=$('mobModelSlot');
+      slot.appendChild(modelTabs); slot.appendChild(corpsSubTabs);
+      secondaires.forEach(el=>mobActions.appendChild(el));
       if(animBar.parentNode!==stage) stage.appendChild(animBar);
       animBar.classList.remove('docked');
     } else {
       ancreModel.after(modelTabs); ancreCorps.after(corpsSubTabs);
+      secondaires.forEach((el,i)=>ancres[i].after(el));
       if(animBar.parentNode!==animSlot) animSlot.appendChild(animBar);
       animBar.classList.add('docked');
     }

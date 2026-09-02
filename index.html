@@ -300,18 +300,22 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
    Naviguer/Placer (#modeTabs, déjà dans le bandeau haut) devient la barre
    du bas ; #modelTabs/#corpsSubTabs sont déplacés en JS dans #mobMenu
    (voir script) pour rester de vrais boutons, pas une copie. */
-#mobMenuBtn,#mobBackdrop,#mobMenu,#fabAdd,#mobLayersBtn,#mobSettingsBtn{display:none}
+#mobModelBar,#mobMenuBtn,#mobBackdrop,#mobMenu,#fabAdd,#mobLayersBtn,#mobSettingsBtn{display:none}
 @media(max-width:860px){
   html,body{overflow:hidden}
-  #app{grid-template-columns:1fr;grid-template-rows:var(--hdr) 1fr;height:100dvh}
-  #stage{grid-column:1;grid-row:2;width:100%;height:100%}
-  /* La pastille du modèle est fixe en haut à droite. Une simple réserve en
-     padding ne suffisait pas : le bandeau défile horizontalement et ses
-     boutons passaient sous la pastille dès qu'on le faisait glisser. On
-     raccourcit donc le bandeau lui-même — le contenu est alors coupé net
-     avant la pastille, jamais dessous. */
-  #topbar{gap:8px;padding:0 8px;margin-right:106px;
-          overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+  #app{grid-template-columns:1fr;grid-template-rows:var(--hdr) auto 1fr;height:100dvh}
+  #stage{grid-column:1;grid-row:3;width:100%;height:100%}
+  /* min-width:0 : sans lui la ligne, élément de grille, refuse de descendre
+     sous la largeur de ses boutons et pousse « Projet » hors de l'écran. */
+  #mobModelBar{grid-column:1;grid-row:2;display:flex;align-items:center;gap:8px;
+               min-width:0;overflow:hidden;
+               padding:5px 8px;background:var(--panel);border-bottom:1px solid var(--line)}
+  #mobModelSlot{flex:1 1 auto;min-width:0;display:flex;gap:8px;
+                overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+  #mobModelSlot::-webkit-scrollbar{display:none}
+  #mobModelSlot .seg{flex:none}
+  /* Le bandeau garde toute la largeur : rien ne flotte plus au-dessus. */
+  #topbar{gap:8px;padding:0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   #topbar::-webkit-scrollbar{display:none}
   #topbar .logo{font-size:10.5px;letter-spacing:1px}
   #modeTabs{display:none}
@@ -333,29 +337,24 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
                -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
   body.mob-left-open #mobBackdrop,body.mob-right-open #mobBackdrop,body.mob-menu-open #mobBackdrop{display:block}
 
-  /* Le modèle courant est écrit en toutes lettres : on voit ce qu'on regarde
-     et qu'on peut en changer, ce qu'un simple ☰ ne disait pas. */
-  #mobMenuBtn{display:flex;align-items:center;gap:5px;
-    position:fixed;top:6px;right:8px;z-index:66;
-    height:34px;padding:0 11px;border-radius:17px;border:1px solid var(--line);
+  /* Actions secondaires (rendu, sauvegarde, thème, aide) : en bout de la
+     ligne de modèle, hors de la zone qui défile, donc toujours atteignable. */
+  #mobMenuBtn{display:flex;align-items:center;gap:5px;flex:none;
+    height:32px;padding:0 11px;border-radius:16px;border:1px solid var(--line);
     background:var(--elev1);color:var(--txt);font-size:12.5px;font-weight:600}
   #mobMenuBtn .fl{color:var(--acc);font-size:10px}
   body.mob-menu-open #mobMenuBtn{background:var(--acc);border-color:var(--acc);color:#fff}
   body.mob-menu-open #mobMenuBtn .fl{color:#fff}
   #mobMenu{display:flex;flex-direction:column;gap:10px;position:fixed;left:8px;right:8px;
-    top:calc(var(--hdr) + 6px);z-index:65;background:var(--panel2);
+    top:calc(var(--hdr) + 48px);z-index:65;background:var(--panel2);
     border:1px solid var(--line);border-radius:12px;padding:12px;
     box-shadow:0 14px 40px rgba(0,0,0,.5);
     transform:translateY(-14px) scale(.98);opacity:0;pointer-events:none;
     transition:.18s}
   body.mob-menu-open #mobMenu{transform:none;opacity:1;pointer-events:auto}
   #mobMenu .mm-h{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt3)}
-  #mobModelSlot{display:flex;flex-direction:column;gap:8px}
-  #mobMenu #modelTabs,#mobMenu #corpsSubTabs{width:100%}
-  #mobMenu #modelTabs button,#mobMenu #corpsSubTabs button{flex:1;padding:9px 6px}
   #mobMenu .mm-row{display:flex;gap:6px;flex-wrap:wrap}
   #mobMenu .mm-row .tb{flex:1 1 30%;justify-content:center;height:38px}
-  #topbar{padding-right:120px}
   #btnCompte{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* Pile d'actions : un bouton principal (ajouter un motif) et deux
@@ -642,6 +641,15 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <div id="toast"></div>
   </div>
 
+  <!-- Sélecteur de modèle : sur mobile il occupe sa propre ligne sous le
+       bandeau. Le poser en pastille flottante obligeait à raccourcir le
+       bandeau, qui se retrouvait coupé. Le bouton « Projet » l'accompagne
+       en bout de ligne, hors de la zone qui défile. -->
+  <div id="mobModelBar">
+    <div id="mobModelSlot"></div>
+    <button id="mobMenuBtn" title="Rendu, sauvegarde, thème, aide"><span id="mobMenuNom">Projet</span><span class="fl">▾</span></button>
+  </div>
+
   <!-- ================= PANNEAU DROIT ================= -->
   <div class="side right" id="sideR">
 
@@ -787,11 +795,8 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
      rapide aux calques et aux réglages, voile de fermeture des tiroirs.
      La barre bas Naviguer/Placer réutilise #modeTabs déjà existant, juste
      repositionné en CSS (voir media query) : aucune duplication d'ID. -->
-<button id="mobMenuBtn" title="Changer de modèle"><span id="mobMenuNom">Modèle</span><span class="fl">▾</span></button>
 <div id="mobBackdrop"></div>
 <div id="mobMenu">
-  <div class="mm-h">Modèle</div>
-  <div id="mobModelSlot"></div>
   <div class="mm-h">Projet</div>
   <div class="mm-row" id="mobActions"></div>
 </div>
@@ -4605,14 +4610,9 @@ function resnapLayers(){
   if(layers[selLayer]) placeSelRing(layers[selLayer]);
 }
 const LEGACY_KIND={bras:'arm', jambe:'male', corps:'male'};
-/** Nom du modèle affiché, écrit sur le bouton mobile de changement. */
-function majNomModele(){
-  const el=$('mobMenuNom'); if(!el) return;
-  const noms={bras:'Bras', arm:'Bras', jambe:'Jambe', glb:'Importé'};
-  el.textContent = modelKind==='corps3d'
-    ? ((CORPS[corpsActif]&&CORPS[corpsActif].nom) || 'Corps')
-    : (noms[modelKind] || 'Modèle');
-}
+/** Le modèle courant est lisible dans la barre de sélection elle-même,
+ *  visible en permanence sous le bandeau : plus rien à recopier ailleurs. */
+function majNomModele(){}
 function syncModelRows(){
   const isArm = modelKind==='bras' || modelKind==='arm';
   const real  = !!ANAT;
@@ -5254,7 +5254,7 @@ const CORPS = {
              fractions de la stature et rapportée à l'os de la tête, donc
              indépendante du réglage de taille. */
           yeux:{ r:0.0095, g:[-0.0200,0.0494,0.0731], d:[0.0200,0.0494,0.0731] },
-          tetons:{ x:0.0720, y:0.6720, z:0.1650, r:0.0210 } },
+          tetons:{ x:0.0720, y:0.6980, z:0.1650, r:0.0210 } },
   // Female arrive en quatre maillages (tête, tronc, bras, jambes) portant
   // chacun sa propre texture : on les reconnaît à leur nombre de sommets.
   female: { nom:'Femme', fichier:'corps/female_anime.glb?v='+ASSET_V,

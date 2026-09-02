@@ -263,6 +263,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 #authErreur:empty,#promptErreur:empty{display:none}
 #compteZone{position:relative}
 #btnCompte.connecte{background:var(--acc);border-color:var(--acc);color:#fff}
+#btnCompte .ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
 #menuCompte{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);
   border:1px solid var(--line);border-radius:9px;min-width:190px;padding:6px;
   box-shadow:0 14px 34px var(--shadow);z-index:70;display:none}
@@ -308,12 +309,13 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   /* min-width:0 : sans lui la ligne, élément de grille, refuse de descendre
      sous la largeur de ses boutons et pousse « Projet » hors de l'écran. */
   #mobModelBar{grid-column:1;grid-row:2;display:flex;align-items:center;gap:8px;
-               min-width:0;overflow:hidden;
+               min-width:0;
                padding:5px 8px;background:var(--panel);border-bottom:1px solid var(--line)}
-  #mobModelSlot{flex:1 1 auto;min-width:0;display:flex;gap:8px;
-                overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
-  #mobModelSlot::-webkit-scrollbar{display:none}
+  /* Bras/Jambe/Corps et Homme/Femme/Super tiennent rarement sur une ligne :
+     ils passent à la ligne plutôt que de glisser sous le bouton Projet. */
+  #mobModelSlot{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;gap:6px}
   #mobModelSlot .seg{flex:none}
+  #mobMenuBtn{align-self:center}
   /* Le bandeau garde toute la largeur : rien ne flotte plus au-dessus. */
   #topbar{gap:8px;padding:0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   #topbar::-webkit-scrollbar{display:none}
@@ -375,15 +377,25 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   #mobLayersBtn{bottom:calc(138px + env(safe-area-inset-bottom))}
   #mobSettingsBtn{bottom:calc(188px + env(safe-area-inset-bottom))}
 
-  /* barre du bas : Naviguer / Placer, réutilise #modeTabs déplacé ici en CSS pur */
+  /* Barre du bas : Naviguer / Placer, réutilise #modeTabs déplacé ici en CSS
+     pur. Le bandeau plein n'a plus de fond : seules les deux pastilles
+     restent, posées sur le dégradé du pied d'animations. Il n'y a donc plus
+     de bande claire entre les deux — c'était la lisière entre le fond du
+     bandeau et la fin du dégradé. */
   body #modeTabs.mob-bar{
     display:flex;position:fixed;left:0;right:0;bottom:0;z-index:56;
-    background:var(--panel2);border-top:1px solid var(--line);
-    padding:8px 10px calc(8px + env(safe-area-inset-bottom));gap:8px
+    background:transparent;border-top:0;
+    padding:0 10px calc(7px + env(safe-area-inset-bottom));gap:8px
   }
-  body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:8px 0;font-size:12.5px}
+  body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:6px 0;font-size:12px;
+    background:var(--glass);border:1px solid var(--line);border-radius:16px;
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  body #modeTabs.mob-bar button.on{background:var(--acc);border-color:var(--acc);color:#fff}
 
-  #hud{bottom:calc(112px + env(safe-area-inset-bottom));max-width:52vw}
+  /* Pastilles d'état : posées juste au-dessus de Naviguer/Placer, et
+     remontées au-dessus des animations quand elles sont là. */
+  #hud{bottom:calc(46px + env(safe-area-inset-bottom));max-width:52vw}
+  body.a-anim #hud{bottom:calc(88px + env(safe-area-inset-bottom))}
   #hudTip{display:none} /* instructions souris, sans objet au toucher */
   #hudFps{display:none}
   #viewbtns{top:8px;right:8px}
@@ -391,10 +403,11 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
      au-dessus de Naviguer/Placer, qui ne recouvre plus le modèle ni les
      pastilles d'état. */
   #animBar{left:0!important;right:0!important;transform:none!important;
-    bottom:calc(56px + env(safe-area-inset-bottom))!important;max-width:none!important;
-    background:linear-gradient(to top, var(--glass), transparent)!important;
+    bottom:0!important;max-width:none!important;
+    background:linear-gradient(to top, var(--glass) 62%, transparent)!important;
     border:0!important;box-shadow:none!important;border-radius:0!important;
-    padding:6px 78px 8px 10px!important;   /* place réservée à la pile de boutons */
+    /* le dégradé couvre aussi la place de Naviguer/Placer, qui flotte dessus */
+    padding:6px 78px calc(44px + env(safe-area-inset-bottom)) 10px!important;
     flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;
     justify-content:flex-start!important;scrollbar-width:none}
   #animBar::-webkit-scrollbar{display:none}
@@ -402,6 +415,15 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     border:1px solid var(--line);border-radius:16px}
 }
 #btnFull.on{background:var(--acc);border-color:var(--acc);color:#fff}
+/* Mode immersif : le repli du plein écran là où l'API n'existe pas. */
+body.immersif #topbar,body.immersif #mobModelBar{display:none}
+body.immersif #app{grid-template-rows:0 0 1fr}
+#sortirImmersif{display:none}
+body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:center;
+  position:fixed;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:80;
+  width:34px;height:34px;border-radius:17px;border:1px solid var(--line);
+  background:var(--glass);color:var(--txt);font-size:15px;cursor:pointer;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 
 #dimCard{
   background:var(--pan2, rgba(255,255,255,.05));
@@ -495,7 +517,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
     <button class="tb" id="btnTheme" title="Thème clair / sombre">☾</button>
     <button class="tb" id="btnHelp" title="Aide (?)">?</button>
     <div id="compteZone">
-      <button class="tb" id="btnCompte" title="Se connecter">Se connecter</button>
+      <button class="tb" id="btnCompte" title="Se connecter" aria-label="Compte"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg></button>
       <div id="menuCompte">
         <div class="nom" id="menuCompteNom">—</div>
         <button id="btnChangerMdp">Changer le mot de passe</button>
@@ -814,6 +836,9 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   <div class="mm-h">Projet</div>
   <div class="mm-row" id="mobActions"></div>
 </div>
+<!-- En mode immersif le bandeau disparaît, et avec lui le bouton qui en fait
+     sortir : celui-ci prend le relais. -->
+<button id="sortirImmersif" title="Quitter le plein écran">⛶</button>
 <button id="fabAdd" title="Ajouter un motif">+</button>
 <button id="mobLayersBtn" title="Calques"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 18l9 5 9-5"/></svg></button>
 <button id="mobSettingsBtn" title="Réglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.9 7.9 0 0 0 0-3l2-1.6-2-3.4-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.4 2 1.6a7.9 7.9 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 2.6 1.5L10 22h4l.4-2.5a8 8 0 0 0 2.6-1.5l2.4 1 2-3.4z"/></svg></button>
@@ -3275,12 +3300,38 @@ function fitView(anim=true){
   const r = modelKind==='corps3d'
     ? Math.max(sz.y*0.60, sz.x*0.42, sz.z*0.42)*0.5
     : Math.max(sz.x, sz.y*0.62, sz.z)*0.5;
-  const dist = r / Math.tan(camera.fov*Math.PI/360) * 1.9;
+  // Sur mobile, le pied (animations + Naviguer/Placer) recouvre le bas de la
+  // scène : sans en tenir compte le corps était cadré sur toute la hauteur et
+  // ses pieds disparaissaient sous les boutons.
+  const m=margeBasse();
+  const tanD=Math.tan(camera.fov*Math.PI/360);
+  const dist = r / tanD * 1.9 / Math.max(1-m, 0.35);
   controls.target.copy(c);
   const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
   if(dir.lengthSq()<0.1) dir.set(0.35,0.15,1).normalize();
-  camera.position.copy(c).addScaledVector(dir, clamp(dist,0.25,9));
+  const d=clamp(dist,0.25,9);
+  camera.position.copy(c).addScaledVector(dir, d);
+  if(m>0.01){
+    // on vise un peu plus bas que le centre : le sujet remonte d'autant dans
+    // la partie restée visible
+    const haut=new THREE.Vector3(0,1,0).addScaledVector(dir, -dir.y);
+    if(haut.lengthSq()>1e-6){
+      haut.normalize().multiplyScalar(m*d*tanD);
+      controls.target.sub(haut); camera.position.sub(haut);
+    }
+  }
   controls.update();
+}
+/** Part de la hauteur de la scène masquée par les barres du bas (mobile). */
+function margeBasse(){
+  const cv=renderer.domElement;
+  const H=cv.clientHeight||1;
+  let px=0;
+  const mt=$('modeTabs');
+  if(mt && mt.classList.contains('mob-bar') && mt.offsetParent) px=Math.max(px, mt.offsetHeight);
+  const ab=$('animBar');
+  if(ab && ab.offsetParent && getComputedStyle(ab).position==='fixed') px=Math.max(px, ab.offsetHeight);
+  return clamp(px/H, 0, 0.45);
 }
 function setView(v){
   const bSkin = modelKind==='corps3d' ? boiteCorpsSkinne() : null;
@@ -4006,7 +4057,10 @@ function couperUV(poly, cle, signe, lim){
     if((da>=0)!==(db>=0)){
       const t=da/(da-db);
       out.push({ p:a.p.clone().lerp(b.p,t), n:a.n.clone().lerp(b.n,t).normalize(),
-                 u:a.u+(b.u-a.u)*t, v:a.v+(b.v-a.v)*t });
+                 u:a.u+(b.u-a.u)*t, v:a.v+(b.v-a.v)*t,
+                 // les poids de peau varient doucement : celui du sommet le
+                 // plus proche fait l'affaire sur un point de découpe
+                 s:(t<0.5?a.s:b.s) });
     }
   }
   return out;
@@ -4088,6 +4142,210 @@ function decalEnroule(bm, l, w, h, rot){
   return g2;
 }
 
+/* ---------- Projection « sur la peau » (dépliage géodésique) ----------------
+   Une projection à plat est une boîte : elle ne voit qu'une direction. Sur une
+   surface courbe — pectoral, épaule, crâne, avant-bras — tout ce qui tourne le
+   dos au projecteur est perdu, et le motif se retrouve tranché. Aucun réglage
+   de profondeur n'y change quoi que ce soit : c'est la nature du procédé.
+   On déplie donc la peau elle-même. Depuis le triangle où l'on a cliqué, on
+   avance de proche en proche et on met chaque triangle à plat en le faisant
+   pivoter autour de l'arête qu'il partage avec le précédent. Les longueurs
+   sont conservées : le motif garde sa taille réelle sur la peau, épouse la
+   courbure et ne s'arrête jamais avant son propre bord.                     */
+function decalSurPeau(bm, l, w, h, rot){
+  const geo=bm.geometry, pos=geo.attributes.position;
+  if(!geo.attributes.normal) geo.computeVertexNormals();
+  const nor=geo.attributes.normal;
+  const P=new THREE.Vector3(l.pos.x,l.pos.y,l.pos.z);
+  const M=bm.matrixWorld, nm=new THREE.Matrix3().getNormalMatrix(M);
+  const inv=new THREE.Matrix4().copy(M).invert();
+  const sc=bm.getWorldScale(new THREE.Vector3());
+  const ech=Math.max(sc.x,sc.y,sc.z,1e-6);
+  // Un chemin le long de la peau est toujours plus long que la corde : un
+  // rayon égal à la demi-diagonale du motif contient donc tout le dépliage.
+  const rayon=0.5*Math.hypot(w,h)*1.30;
+  const idx=geo.index, IA=idx?idx.array:null;
+  const total = idx ? idx.count/3 : pos.count/3;
+  if(_pxBuf.length<total) _pxBuf=new Int32Array(total);
+  const nPr=trisNear(geo, P.clone().applyMatrix4(inv), rayon/ech, _pxBuf);
+  if(!nPr) return null;
+
+  // Sommets soudés par position : les maillages sont non indexés et les
+  // triangles voisins ne partageraient sinon aucun sommet commun. Clés
+  // numériques : sur un grand motif il y a des dizaines de milliers de
+  // sommets, et des clés texte y coûtaient plus cher que tout le reste.
+  const QP=2e4, DEC=131072, OFF=65536;
+  const cle=new Map();
+  const PX=[], PY=[], PZ=[], NX=[], NY=[], NZ=[], SRC=[];
+  // Les poids de peau sont déjà portés par le maillage : les recopier revient
+  // bien moins cher que de les rechercher ensuite sommet par sommet — c'est
+  // là que passaient les 1,9 s d'un grand motif, pas dans le dépliage.
+  const aSI=geo.attributes.skinIndex, aSW=geo.attributes.skinWeight;
+  const pa=pos.array, na=nor.array;
+  const e11=M.elements;
+  const nme=nm.elements;
+  function vid(i){
+    const x0=pa[i*3], y0=pa[i*3+1], z0=pa[i*3+2];
+    const x=e11[0]*x0+e11[4]*y0+e11[8]*z0+e11[12];
+    const y=e11[1]*x0+e11[5]*y0+e11[9]*z0+e11[13];
+    const z=e11[2]*x0+e11[6]*y0+e11[10]*z0+e11[14];
+    const k=((Math.round(x*QP)+OFF)*DEC + (Math.round(y*QP)+OFF))*DEC + (Math.round(z*QP)+OFF);
+    let id=cle.get(k);
+    if(id===undefined){
+      id=PX.length; cle.set(k,id); SRC.push(i);
+      PX.push(x); PY.push(y); PZ.push(z);
+      const a0=na[i*3], b0=na[i*3+1], c0=na[i*3+2];
+      let ax=nme[0]*a0+nme[3]*b0+nme[6]*c0;
+      let ay=nme[1]*a0+nme[4]*b0+nme[7]*c0;
+      let az=nme[2]*a0+nme[5]*b0+nme[8]*c0;
+      const L=Math.sqrt(ax*ax+ay*ay+az*az)||1;
+      NX.push(ax/L); NY.push(ay/L); NZ.push(az/L);
+    }
+    return id;
+  }
+  const TA=new Int32Array(nPr*3);
+  for(let q=0;q<nPr;q++){
+    const t=_pxBuf[q];
+    const i0=IA?IA[t*3]:t*3, i1=IA?IA[t*3+1]:t*3+1, i2=IA?IA[t*3+2]:t*3+2;
+    TA[q*3]=vid(i0); TA[q*3+1]=vid(i1); TA[q*3+2]=vid(i2);
+  }
+  const NB=PX.length;
+  const are=new Map();
+  for(let ti=0;ti<nPr;ti++){
+    for(let k=0;k<3;k++){
+      const a=TA[ti*3+k], b=TA[ti*3+(k+1)%3];
+      const key = a<b ? a*NB+b : b*NB+a;
+      const e=are.get(key);
+      if(e===undefined) are.set(key,[ti]); else e.push(ti);
+    }
+  }
+
+  // triangle de départ : le plus proche du point posé
+  let seed=-1, bd=1e30;
+  const Px=P.x, Py=P.y, Pz=P.z;
+  for(let ti=0;ti<nPr;ti++){
+    const a=TA[ti*3], b=TA[ti*3+1], c=TA[ti*3+2];
+    const dx=(PX[a]+PX[b]+PX[c])/3-Px, dy=(PY[a]+PY[b]+PY[c])/3-Py, dz=(PZ[a]+PZ[b]+PZ[c])/3-Pz;
+    const d=dx*dx+dy*dy+dz*dz; if(d<bd){ bd=d; seed=ti; }
+  }
+  if(seed<0) return null;
+  const dist3=(i,j)=>{ const dx=PX[i]-PX[j], dy=PY[i]-PY[j], dz=PZ[i]-PZ[j];
+    return Math.sqrt(dx*dx+dy*dy+dz*dz); };
+
+  // repère 2D : les axes du calque, ramenés dans le plan du triangle de départ
+  const q0=layerBasis(l);
+  const s0=TA[seed*3], s1=TA[seed*3+1], s2=TA[seed*3+2];
+  const nz=new THREE.Vector3(PX[s1]-PX[s0],PY[s1]-PY[s0],PZ[s1]-PZ[s0])
+    .cross(new THREE.Vector3(PX[s2]-PX[s0],PY[s2]-PY[s0],PZ[s2]-PZ[s0]));
+  if(nz.lengthSq()<1e-20) return null;
+  nz.normalize();
+  const ex=new THREE.Vector3(1,0,0).applyQuaternion(q0);
+  ex.addScaledVector(nz, -ex.dot(nz));
+  if(ex.lengthSq()<1e-12) return null;
+  ex.normalize();
+  const ey=new THREE.Vector3().crossVectors(nz, ex).normalize();
+  const cr=Math.cos(rot||0), sr=Math.sin(rot||0);
+  const ax=ex.clone().multiplyScalar(cr).addScaledVector(ey, sr);
+  const ay=ey.clone().multiplyScalar(cr).addScaledVector(ex, -sr);
+
+  const U=new Float64Array(NB).fill(NaN);
+  const V=new Float64Array(NB).fill(NaN);
+  [s0,s1,s2].forEach(i=>{ const dx=PX[i]-Px, dy=PY[i]-Py, dz=PZ[i]-Pz;
+    U[i]=dx*ax.x+dy*ax.y+dz*ax.z; V[i]=dx*ay.x+dy*ay.y+dz*ay.z; });
+
+  /** Pose le sommet `c` à plat, sachant l'arête (a,b) déjà posée. Deux
+   *  solutions symétriques : on garde celle opposée au sommet déjà connu. */
+  function poser(c,a,b,opp){
+    const Ax=U[a], Ay=V[a], dx=U[b]-Ax, dy=V[b]-Ay, L=Math.sqrt(dx*dx+dy*dy);
+    if(!(L>1e-12)){ U[c]=Ax; V[c]=Ay; return; }
+    const ux=dx/L, uy=dy/L, nx=-uy, ny=ux;
+    const ra=dist3(c,a), rb=dist3(c,b);
+    const x=(ra*ra - rb*rb + L*L)/(2*L);
+    const y=Math.sqrt(Math.max(ra*ra - x*x, 0));
+    const px=Ax+ux*x, py=Ay+uy*x;
+    const cote=(U[opp]-Ax)*nx + (V[opp]-Ay)*ny;
+    const s=(cote>0)? -y : y;
+    U[c]=px+nx*s; V[c]=py+ny*s;
+  }
+
+  const dw=w*0.5, dh=h*0.5;
+  const vu=new Uint8Array(nPr); vu[seed]=1;
+  const file=new Int32Array(nPr); let fq=0, fw=0; file[fw++]=seed;
+  const garde=new Int32Array(nPr); let ng=0;
+  while(fq<fw){
+    const ti=file[fq++];
+    const t0=TA[ti*3], t1=TA[ti*3+1], t2=TA[ti*3+2];
+    const u0=U[t0],u1=U[t1],u2=U[t2], v0=V[t0],v1=V[t1],v2=V[t2];
+    if(u0!==u0 || u1!==u1 || u2!==u2) continue;
+    // Hors du cadre : on ne le garde pas et on ne propage pas au-delà — le
+    // cadre étant convexe, rien d'utile ne se trouve derrière.
+    if((u0<-dw&&u1<-dw&&u2<-dw)||(u0>dw&&u1>dw&&u2>dw)) continue;
+    if((v0<-dh&&v1<-dh&&v2<-dh)||(v0>dh&&v1>dh&&v2>dh)) continue;
+    garde[ng++]=ti;
+    for(let k=0;k<3;k++){
+      const a=TA[ti*3+k], b=TA[ti*3+(k+1)%3], opp=TA[ti*3+(k+2)%3];
+      const lst=are.get(a<b?a*NB+b:b*NB+a);
+      if(lst===undefined) continue;
+      for(let z=0;z<lst.length;z++){
+        const tj=lst[z];
+        if(tj===ti || vu[tj]) continue;
+        const c0=TA[tj*3], c1=TA[tj*3+1], c2=TA[tj*3+2];
+        const c = (c0!==a&&c0!==b) ? c0 : ((c1!==a&&c1!==b) ? c1 : c2);
+        if(c===a||c===b) continue;
+        if(U[c]!==U[c]) poser(c,a,b,opp);
+        vu[tj]=1; file[fw++]=tj;
+      }
+    }
+  }
+  if(!ng) return null;
+
+  const sP=[], sN=[], sU=[];
+  const sI = aSI ? [] : null, sW = aSW ? [] : null;
+  const poidsDe=(src)=>{ if(!sI) return;
+    for(let j=0;j<4;j++){ sI.push(aSI.array[src*4+j]); sW.push(aSW.array[src*4+j]); } };
+  const pousse=(i,u,v)=>{
+    sP.push(PX[i]+NX[i]*3e-4, PY[i]+NY[i]*3e-4, PZ[i]+NZ[i]*3e-4);
+    sN.push(NX[i],NY[i],NZ[i]); sU.push(u,v); poidsDe(SRC[i]);
+  };
+  for(let z=0;z<ng;z++){
+    const ti=garde[z];
+    const a=TA[ti*3], b=TA[ti*3+1], c=TA[ti*3+2];
+    const ua=U[a]/w+0.5, va=V[a]/h+0.5;
+    const ub=U[b]/w+0.5, vb=V[b]/h+0.5;
+    const uc=U[c]/w+0.5, vc=V[c]/h+0.5;
+    // Cas courant : le triangle tient entièrement dans le cadre, rien à
+    // découper — c'est la grande majorité, et l'y faire passer coûtait cher.
+    if(ua>=0&&ua<=1&&va>=0&&va<=1&&ub>=0&&ub<=1&&vb>=0&&vb<=1&&uc>=0&&uc<=1&&vc>=0&&vc<=1){
+      pousse(a,ua,va); pousse(b,ub,vb); pousse(c,uc,vc);
+      continue;
+    }
+    let poly=[{p:new THREE.Vector3(PX[a],PY[a],PZ[a]), n:new THREE.Vector3(NX[a],NY[a],NZ[a]), u:ua, v:va, s:SRC[a]},
+              {p:new THREE.Vector3(PX[b],PY[b],PZ[b]), n:new THREE.Vector3(NX[b],NY[b],NZ[b]), u:ub, v:vb, s:SRC[b]},
+              {p:new THREE.Vector3(PX[c],PY[c],PZ[c]), n:new THREE.Vector3(NX[c],NY[c],NZ[c]), u:uc, v:vc, s:SRC[c]}];
+    poly=couperUV(poly,'u', 1,0); if(poly.length<3) continue;
+    poly=couperUV(poly,'u',-1,1); if(poly.length<3) continue;
+    poly=couperUV(poly,'v', 1,0); if(poly.length<3) continue;
+    poly=couperUV(poly,'v',-1,1); if(poly.length<3) continue;
+    for(let k=1;k+1<poly.length;k++){
+      const tri=[poly[0],poly[k],poly[k+1]];
+      for(let j=0;j<3;j++){ const g=tri[j];
+        sP.push(g.p.x+g.n.x*3e-4, g.p.y+g.n.y*3e-4, g.p.z+g.n.z*3e-4);
+        sN.push(g.n.x,g.n.y,g.n.z); sU.push(g.u,g.v); poidsDe(g.s); }
+    }
+  }
+  if(sP.length<9) return null;
+  const g2=new THREE.BufferGeometry();
+  g2.setAttribute('position', new THREE.Float32BufferAttribute(sP,3));
+  g2.setAttribute('normal',   new THREE.Float32BufferAttribute(sN,3));
+  g2.setAttribute('uv',       new THREE.Float32BufferAttribute(sU,2));
+  if(sI){
+    g2.setAttribute('skinIndex',  new THREE.Uint16BufferAttribute(sI,4));
+    g2.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW,4));
+  }
+  g2.computeBoundingBox(); g2.computeBoundingSphere();
+  return g2;
+}
+
 /** Retire d'un décalque les triangles qui tournent le dos au projecteur.
  *  DecalGeometry coupe la projection avec une boîte : sur un avant-bras, la
  *  peau s'enfonce plus vite que la profondeur de cette boîte et le motif se
@@ -4143,9 +4401,12 @@ function rebuildDecal(l){
     if(bs.center.distanceTo(l.pos) > bs.radius+radius) return;
     let g;
     try{
-      if(l.wrap) g=decalEnroule(bm, l, w, h, (l.rot||0)*Math.PI/180);
-      // Sur une zone trop plate (dos, poitrine) il n'y a pas d'axe à suivre :
-      // on retombe sur la projection à plat plutôt que de perdre le calque.
+      const ang=(l.rot||0)*Math.PI/180;
+      if(l.wrap) g=decalEnroule(bm, l, w, h, ang);
+      // Dépliage de la peau : c'est le procédé par défaut, celui qui ne coupe
+      // jamais. L'enroulement cylindrique reste pour fermer exactement un
+      // bracelet, et la projection en boîte sert d'ultime filet.
+      if(!g) g=decalSurPeau(bm, l, w, h, ang);
       if(!g){
         const src = localProxy(bm, l.pos, radius) || bm;
         g=couperDos(new DecalGeometry(src, l.pos, e, size), axeProj);
@@ -4156,7 +4417,8 @@ function rebuildDecal(l){
     // Sur un corps animé, la décalcomanie doit être skinnée comme la peau,
     // sinon elle reste figée pendant que le corps bouge.
     const sm = bm.userData.source;
-    if(sm && sm.isSkinnedMesh && skinnerDecal(g, sm)){
+    const dejaPeau = !!(g.attributes.skinIndex && g.attributes.skinWeight);
+    if(sm && sm.isSkinnedMesh && (dejaPeau || skinnerDecal(g, sm))){
       const inv=new THREE.Matrix4().copy(sm.matrixWorld).invert();
       g.applyMatrix4(inv);                       // passage en repère local de la peau
       const m=new THREE.SkinnedMesh(g, l.mat);
@@ -4214,7 +4476,7 @@ function addLayer(flashId, pos, normal, mesh){
   l.canon = pos.clone().applyMatrix4(anatXformInv);
   l.canonN = normal.clone();
   l.norm = versNorm(l.canon, familleModele());
-  l.anc  = ancrerSurSquelette(pos);
+  l.anc  = ancrerSurSquelette(pos, normal);
   l.region = regionOf(depuisNorm(l.norm,'anat'));
   layers.push(l);
   refreshLayerMaterial(l);
@@ -4512,7 +4774,7 @@ canvas.addEventListener('pointermove', e=>{
       l.pos.copy(h.point); l.normal.copy(worldNormal(h)); l.mesh=h.object;
       l.canon=l.pos.clone().applyMatrix4(anatXformInv); l.canonN=l.normal.clone();
       l.norm=versNorm(l.canon, familleModele());
-      l.anc=ancrerSurSquelette(l.pos);
+      l.anc=ancrerSurSquelette(l.pos, l.normal);
       l.region=regionOf(depuisNorm(l.norm,'anat')); l.offView=false; needRebuild=l;
       if(suite.length && delta.lengthSq()>1e-10){
         suite.forEach(o=>{
@@ -4522,7 +4784,7 @@ canvas.addEventListener('pointermove', e=>{
           o.pos.copy(s.point); o.normal.copy(s.normal); o.mesh=s.mesh;
           o.canon=o.pos.clone().applyMatrix4(anatXformInv); o.canonN=o.normal.clone();
           o.norm=versNorm(o.canon, familleModele());
-          o.anc=ancrerSurSquelette(o.pos);
+          o.anc=ancrerSurSquelette(o.pos, o.normal);
           o.region=regionOf(depuisNorm(o.norm,'anat')); o.offView=false;
           rebuildDecal(o);
         });
@@ -4679,7 +4941,28 @@ function repereAutour(axe){
   const v=new THREE.Vector3().crossVectors(axe,u).normalize();
   return {u,v};
 }
-function ancrerSurSquelette(pos){
+/** Ancrage d'un point sur le squelette, dans le repère de l'os le plus
+ *  proche et en fractions de sa longueur.
+ *  L'ancien repérage cylindrique (position le long de l'os, angle autour,
+ *  distance à l'axe) devenait faux dès qu'un point sortait du segment ou
+ *  s'approchait de son axe : sur le sommet du crâne, au-dessus de l'os de la
+ *  tête, la part le long de l'axe était écrêtée et l'angle autour n'avait
+ *  plus de sens — le motif ressortait sur le côté du crâne du modèle suivant.
+ *  Trois coordonnées cartésiennes règlent les deux cas d'un coup. On garde en
+ *  plus l'orientation de la peau, pour savoir de quel côté revenir se poser. */
+/** Longueur de référence d'un segment osseux.
+ *  Pour la tête, l'os cou→tête ne fait que quelques centimètres : rapporter à
+ *  lui la position du sommet du crâne — trois à cinq fois plus haut —
+ *  amplifiait le moindre écart entre deux modèles. On prend donc la hauteur
+ *  réelle de la tête, du cou au sommet, qui se compare d'un corps à l'autre. */
+function longueurSegment(id, A, B){
+  if(id==='tete'){
+    const b = modelKind==='corps3d' ? boiteCorpsSkinne() : modelBox;
+    if(b && isFinite(b.max.y)){ const h=b.max.y - A.y; if(h>1e-3) return h; }
+  }
+  return A.distanceTo(B);
+}
+function ancrerSurSquelette(pos, nrm){
   const J=jointsModele();
   let best=null;
   SEGMENTS.forEach(([id,a,b])=>{
@@ -4692,11 +4975,17 @@ function ancrerSurSquelette(pos){
     if(!best || d<best.d) best={id,t,d,A,ab,proj};
   });
   if(!best) return null;
-  const L=best.ab.length();
-  const axe=best.ab.clone().divideScalar(L);
+  const axe=best.ab.clone().normalize();
+  const L=longueurSegment(best.id, best.A, best.A.clone().add(best.ab));
   const {u,v}=repereAutour(axe);
+  const d=new THREE.Vector3().subVectors(pos,best.A);
   const rad=new THREE.Vector3().subVectors(pos,best.proj);
-  return {seg:best.id, t:best.t, ang:Math.atan2(rad.dot(v), rad.dot(u)), r:rad.length()/L};
+  const n=nrm ? nrm.clone().normalize() : rad.clone().normalize();
+  return {seg:best.id,
+          a:d.dot(axe)/L, b:d.dot(u)/L, c:d.dot(v)/L,
+          na:n.dot(axe), nb:n.dot(u), nc:n.dot(v),
+          // format cylindrique conservé : les projets déjà enregistrés le lisent
+          t:best.t, ang:Math.atan2(rad.dot(v), rad.dot(u)), r:rad.length()/L};
 }
 /** Reconstruit la position visée sur le modèle courant. */
 function pointDepuisAncre(anc){
@@ -4704,12 +4993,24 @@ function pointDepuisAncre(anc){
   const s=SEGMENTS.find(x=>x[0]===anc.seg); if(!s) return null;
   const A=J[s[1]], B=J[s[2]]; if(!A||!B) return null;
   const ab=new THREE.Vector3().subVectors(B,A);
-  const L=ab.length(); if(L<1e-9) return null;
-  const axe=ab.clone().divideScalar(L);
+  if(ab.lengthSq()<1e-18) return null;
+  const axe=ab.clone().normalize();
+  const L=longueurSegment(anc.seg, A, B); if(L<1e-9) return null;
   const {u,v}=repereAutour(axe);
+  if(anc.a!==undefined){
+    const cible=A.clone().addScaledVector(axe,anc.a*L)
+                         .addScaledVector(u,  anc.b*L)
+                         .addScaledVector(v,  anc.c*L);
+    const dir=axe.clone().multiplyScalar(anc.na||0)
+                 .addScaledVector(u,anc.nb||0).addScaledVector(v,anc.nc||0);
+    if(dir.lengthSq()<1e-8) dir.copy(u);
+    dir.normalize();
+    return {cible, dir, longueur:L, axe:A.clone().addScaledVector(axe,anc.a*L)};
+  }
+  const Lo=ab.length();
   const proj=A.clone().addScaledVector(ab,anc.t);
   const dir=u.clone().multiplyScalar(Math.cos(anc.ang)).addScaledVector(v,Math.sin(anc.ang));
-  return {axe:proj, dir, cible:proj.clone().addScaledVector(dir, anc.r*L), longueur:L};
+  return {axe:proj, dir, cible:proj.clone().addScaledVector(dir, anc.r*Lo), longueur:Lo};
 }
 
 /** Point de peau le plus proche d'une cible, sur le corps actuellement
@@ -4790,11 +5091,17 @@ function resnapLayers(){
     if(l.anc){
       const p=pointDepuisAncre(l.anc);
       if(p){
-        const depart=p.axe.clone().addScaledVector(p.dir, p.longueur*1.6);
+        // On part d'un point franchement au-dessus de la peau visée et on
+        // revient vers elle : le rayon touche ainsi la face extérieure, et
+        // au bon endroit même quand le point est presque sur l'axe de l'os
+        // — le sommet du crâne, par exemple.
+        const depart=p.cible.clone().addScaledVector(p.dir, p.longueur*0.8);
         ray.set(depart, p.dir.clone().negate());
         const h=ray.intersectObjects(bodyMeshes,false);
-        if(h.length){
-          l.pos.copy(h[0].point); l.normal.copy(worldNormal(h[0])); l.mesh=h[0].object;
+        let ok=null;
+        for(const x of h){ if(x.point.distanceTo(p.cible) < p.longueur*0.55){ ok=x; break; } }
+        if(ok){
+          l.pos.copy(ok.point); l.normal.copy(worldNormal(ok)); l.mesh=ok.object;
           l.offView=false; pose=true;
         } else {
           const s=surfaceLaPlusProche(p.cible, p.longueur*0.9);
@@ -5108,12 +5415,29 @@ $$('#viewbtns button').forEach(b=>b.addEventListener('click',()=>setView(b.datas
 const compact = ()=> matchMedia('(max-width:900px)').matches;
 /** Plein écran : on ne masque plus les panneaux un par un — rien ne peut donc
  *  rester « perdu » hors de vue. On bascule toute la fenêtre. */
+/* Safari iOS ne donne le plein écran qu'aux vidéos : requestFullscreen n'y
+   existe pas sur documentElement et le bouton ne faisait rien. On replie
+   alors sur un mode immersif — bandeau et barre de modèle escamotés — qui
+   rend la même chose à l'usage : toute la hauteur pour le corps. */
+function pleinEcranDispo(){
+  const e=document.documentElement;
+  return !!(e.requestFullscreen || e.webkitRequestFullscreen);
+}
 function toggleFullscreen(){
   const d=document, e=d.documentElement;
-  if(!d.fullscreenElement){ if(e.requestFullscreen) e.requestFullscreen(); }
-  else if(d.exitFullscreen) d.exitFullscreen();
+  if(pleinEcranDispo()){
+    const actif = d.fullscreenElement || d.webkitFullscreenElement;
+    if(!actif) (e.requestFullscreen||e.webkitRequestFullscreen).call(e);
+    else (d.exitFullscreen||d.webkitExitFullscreen).call(d);
+    return;
+  }
+  const im=d.body.classList.toggle('immersif');
+  $('btnFull').classList.toggle('on', im);
+  if(im) setMode('orbit');
+  requestAnimationFrame(()=>{ resize(); fitView(); });
 }
 $('btnFull').addEventListener('click', toggleFullscreen);
+$('sortirImmersif').addEventListener('click', toggleFullscreen);
 document.addEventListener('fullscreenchange', ()=>{
   const actif=!!document.fullscreenElement;
   $('btnFull').classList.toggle('on', actif);
@@ -5243,8 +5567,12 @@ function nomAffiche(){
 }
 function majBadgeCompte(){
   const b=$('btnCompte');
+  // Une pastille de profil plutôt qu'un libellé : « Se connecter » prenait la
+  // largeur de trois boutons dans un bandeau déjà étroit. Le prénom reste
+  // affiché une fois connecté, il porte une information.
+  const ic='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
   if(session){ b.textContent=nomAffiche(); b.classList.add('connecte'); b.title='Compte'; $('menuCompteNom').textContent=session.user.email; }
-  else { b.textContent='Se connecter'; b.classList.remove('connecte'); b.title='Se connecter'; $('menuCompte').classList.remove('show'); }
+  else { b.innerHTML=ic; b.classList.remove('connecte'); b.title='Se connecter'; $('menuCompte').classList.remove('show'); }
   majDossierConfigs();
 }
 async function initAuth(){
@@ -5630,6 +5958,8 @@ async function _chargerCorpsInterne(cle){
   window.__clips = g.animations;
   clipCourant=null;
   $('animBar').style.display = g.animations.length ? 'flex' : 'none';
+  // Les pastilles d'état se calent au-dessus du pied d'animations quand il est là.
+  document.body.classList.toggle('a-anim', !!g.animations.length);
   majBoutonsAnim('__stop');
 
   anatXform.identity(); anatXformInv.identity();

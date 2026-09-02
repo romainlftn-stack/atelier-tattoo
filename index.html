@@ -589,6 +589,20 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
         <div class="row"><label>Rotation</label><input type="range" id="tRot" min="-180" max="180" value="0" step="1"><span class="num" id="vtRot">0°</span></div>
         <div class="row"><label>Enfoncement</label><input type="range" id="tDepth" min="2" max="40" value="8" step="0.5"><span class="num" id="vtDepth">8</span></div>
         <div class="row"><label>Étirement</label><input type="range" id="tAspect" min="50" max="200" value="100" step="1"><span class="num" id="vtAspect">100</span></div>
+        <!-- Un motif plus large que le membre ne tient pas sur une projection
+             à plat : au-delà de la silhouette il n'y a plus de peau face au
+             projecteur. « Enroulée » projette en coordonnées cylindriques et
+             fait le tour du bras — c'est aussi ce qu'il faut pour un
+             bracelet. -->
+        <div class="row"><label>Projection</label>
+          <div class="seg" id="tWrap">
+            <button data-w="0" class="on">À plat</button>
+            <button data-w="1">Enroulée</button>
+          </div>
+        </div>
+        <div class="row wide" id="rowTour" style="display:none">
+          <button class="tb" id="tTour" title="Règle la largeur sur la circonférence du membre : le motif se referme exactement">Ajuster au tour du membre</button>
+        </div>
         <div class="sep"></div>
         <div class="row"><label>Opacité</label><input type="range" id="tOpacity" min="5" max="100" value="92"><span class="num" id="vtOpacity">92</span></div>
         <div class="row"><label>Cicatrisation</label><input type="range" id="tHealed" min="0" max="100" value="18"><span class="num" id="vtHealed">18</span></div>
@@ -818,6 +832,13 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   et non des textures photo livrées avec ces modèles : celles-ci sont des
   atlas de photogrammétrie dont chaque morceau porte une dominante
   différente, ce qui plaquait des taches sur le corps.</p>
+  <h4>Projection à plat ou enroulée</h4>
+  <p>Un motif plus large que le membre ne tient pas sur une projection à plat :
+  au-delà de la silhouette il n'y a plus de peau face au projecteur et le
+  dessin s'arrête. Sur un bras ou une jambe, passez la <b>Projection</b> sur
+  <b>Enroulée</b> : le motif suit la peau tout autour du membre. Pour un
+  bracelet, ajoutez <b>Ajuster au tour du membre</b> — la largeur est réglée
+  sur la circonférence et le motif se referme exactement.</p>
   <h4>Panneau de droite</h4>
   <p>Il change avec le modèle : <b>Morphologie</b> (côté, musculature,
   corpulence, carnation) sur un membre isolé, <b>Animations</b> sur un corps
@@ -3793,8 +3814,9 @@ function loadFiles(files){
    7 · CALQUES DE TATOUAGE (projection décalcomanie sur la peau)
    ===================================================================== */
 let layers=[], selLayer=-1;
-const DEF_LAYER = {size:12, rot:0, depth:14, aspect:100, opacity:92, healed:18, fresh:0,
-                   relief:22, ink:'#141018', align:'up', flipH:false, locked:false, visible:true};
+const DEF_LAYER = {size:12, rot:0, depth:15, aspect:100, opacity:92, healed:18, fresh:0,
+                   relief:22, ink:'#141018', align:'up', flipH:false, locked:false,
+                   visible:true, wrap:0};
 
 const selRing = new THREE.Mesh(
   new THREE.RingGeometry(0.5,0.512,72),
@@ -3937,6 +3959,171 @@ function localProxy(bm, worldCenter, radius){
   _pxCache={valid:true, bm, c:worldCenter.clone(), r:radius*1.45};
   return _proxy;
 }
+/* ---------- Projection enroulée autour d'un membre --------------------------
+   La projection à plat de DecalGeometry est une boîte : au-delà de la
+   silhouette du bras il n'y a plus de peau face au projecteur et le motif
+   s'arrête — un cercle de 12 cm posé sur un avant-bras de 7 cm perdait sa
+   moitié gauche, et un bracelet était impossible à poser.
+   On projette donc en coordonnées cylindriques autour de l'os : l'axe donne
+   la hauteur, l'angle autour de cet axe donne la largeur. Le motif suit la
+   peau sur tout le tour, sans coupure ni raccord.
+   L'axe vient du squelette et non d'un ajustement géométrique : c'est exact,
+   immédiat, et cela réserve d'office le procédé aux membres — le tronc et la
+   tête ne sont pas des cylindres et le motif s'y étalerait n'importe comment. */
+function axeMembre(p, region){
+  // Le point doit être sur un membre : la région déjà calculée pour le calque
+  // le dit mieux qu'une distance. Un point de poitrine se trouve à 19 cm de
+  // l'os du bras — assez près pour tromper un simple seuil, et le motif
+  // s'enroulait alors autour d'un axe qui n'était pas le sien.
+  if(region && !/^(arm|leg)/i.test(region)) return null;
+  const J=jointsModele();
+  let best=null;
+  SEGMENTS.forEach(([id,a,b])=>{
+    if(!/^(bras|jambe)/.test(id)) return;
+    if(region && /^arm/i.test(region) && !/^bras/.test(id)) return;
+    if(region && /^leg/i.test(region) && !/^jambe/.test(id)) return;
+    const A=J[a], B=J[b]; if(!A||!B) return;
+    const ab=new THREE.Vector3().subVectors(B,A);
+    const L2=ab.lengthSq(); if(L2<1e-9) return;
+    const t=clamp(new THREE.Vector3().subVectors(p,A).dot(ab)/L2, 0, 1);
+    const proj=A.clone().addScaledVector(ab,t);
+    const d=proj.distanceTo(p);
+    if(!best || d<best.d) best={id, d, proj, axe:ab.clone().normalize(), L:Math.sqrt(L2)};
+  });
+  // Le rayon d'un membre ne dépasse guère 45 % de la longueur de son os :
+  // au-delà, on est à côté du membre, pas dessus.
+  if(!best || best.d<1e-4 || best.d>best.L*0.45) return null;
+  return {axe:best.axe, ptAxe:best.proj, rho:best.d, seg:best.id};
+}
+
+/** Découpe un polygone (sommets {p,n,u,v}) par une demi-droite en UV. */
+function couperUV(poly, cle, signe, lim){
+  const out=[];
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i], b=poly[(i+1)%poly.length];
+    const da=(a[cle]-lim)*signe, db=(b[cle]-lim)*signe;
+    if(da>=0) out.push(a);
+    if((da>=0)!==(db>=0)){
+      const t=da/(da-db);
+      out.push({ p:a.p.clone().lerp(b.p,t), n:a.n.clone().lerp(b.n,t).normalize(),
+                 u:a.u+(b.u-a.u)*t, v:a.v+(b.v-a.v)*t });
+    }
+  }
+  return out;
+}
+
+/** Géométrie du décalque enroulé, en repère monde (comme DecalGeometry). */
+function decalEnroule(bm, l, w, h, rot){
+  const geo=bm.geometry, pos=geo.attributes.position;
+  if(!geo.attributes.normal) geo.computeVertexNormals();
+  const nor=geo.attributes.normal;
+  const P=new THREE.Vector3(l.pos.x,l.pos.y,l.pos.z);
+  const rep=axeMembre(P, l.region);
+  if(!rep) return null;
+  const A=rep.axe.clone(), ptAxe=rep.ptAxe, rho=rep.rho;
+  // Un axe d'os a un sens arbitraire (épaule→coude ou l'inverse) : on
+  // l'aligne sur le haut du calque en projection à plat, sinon le motif se
+  // retrouvait tête en bas et basculer d'un mode à l'autre le retournait.
+  const haut=new THREE.Vector3(0,1,0).applyQuaternion(layerBasis(l));
+  if(A.dot(haut)<0) A.negate();
+  const Rv=new THREE.Vector3().subVectors(P, ptAxe).normalize();
+  const Tv=new THREE.Vector3().crossVectors(A, Rv).normalize();
+  const cr=Math.cos(rot||0), sr=Math.sin(rot||0);
+
+  // Voisinage : la bande tient dans une sphère centrée sur l'axe. Balayer
+  // tout le corps coûtait 288 ms par reconstruction, soit un glissé de
+  // curseur inutilisable.
+  const inv=new THREE.Matrix4().copy(bm.matrixWorld).invert();
+  const sc=bm.getWorldScale(new THREE.Vector3());
+  const ech=Math.max(sc.x,sc.y,sc.z,1e-6);
+  const cLoc=ptAxe.clone().applyMatrix4(inv);
+  const Rloc=Math.hypot(h*0.6, rho*1.7)/ech;
+  const idx=geo.index, IA=idx?idx.array:null;
+  const total = idx ? idx.count/3 : pos.count/3;
+  if(_pxBuf.length<total) _pxBuf=new Int32Array(total);
+  const nProche=trisNear(geo, cLoc, Rloc, _pxBuf);
+  if(!nProche) return null;
+
+  const vw=new THREE.Vector3(), nw=new THREE.Vector3(), dd=new THREE.Vector3();
+  const nm=new THREE.Matrix3().getNormalMatrix(bm.matrixWorld);
+  /** coordonnées cylindriques d'un sommet, angle recalé sur `ref` */
+  function coord(i, ref){
+    vw.fromBufferAttribute(pos,i).applyMatrix4(bm.matrixWorld);
+    nw.fromBufferAttribute(nor,i).applyMatrix3(nm).normalize();
+    dd.subVectors(vw, ptAxe);
+    const z=dd.dot(A);
+    let th=Math.atan2(dd.dot(Tv), dd.dot(Rv));
+    if(ref!==null){ while(th-ref> Math.PI) th-=2*Math.PI;
+                    while(th-ref<-Math.PI) th+=2*Math.PI; }
+    const arc=th*rho;
+    const x2= arc*cr + z*sr, y2= -arc*sr + z*cr;
+    return {p:vw.clone(), n:nw.clone(), u:x2/w+0.5, v:y2/h+0.5, th};
+  }
+  const sP=[], sN=[], sU=[];
+  for(let q=0;q<nProche;q++){
+    const t=_pxBuf[q];
+    const i0=IA?IA[t*3]:t*3, i1=IA?IA[t*3+1]:t*3+1, i2=IA?IA[t*3+2]:t*3+2;
+    const a=coord(i0,null), b=coord(i1,a.th), c=coord(i2,a.th);
+    if((a.u<0&&b.u<0&&c.u<0)||(a.u>1&&b.u>1&&c.u>1)) continue;
+    if((a.v<0&&b.v<0&&c.v<0)||(a.v>1&&b.v>1&&c.v>1)) continue;
+    let poly=[a,b,c];
+    poly=couperUV(poly,'u', 1,0); if(poly.length<3) continue;
+    poly=couperUV(poly,'u',-1,1); if(poly.length<3) continue;
+    poly=couperUV(poly,'v', 1,0); if(poly.length<3) continue;
+    poly=couperUV(poly,'v',-1,1); if(poly.length<3) continue;
+    for(let k=1;k+1<poly.length;k++){
+      [poly[0],poly[k],poly[k+1]].forEach(g=>{
+        sP.push(g.p.x+g.n.x*3e-4, g.p.y+g.n.y*3e-4, g.p.z+g.n.z*3e-4);
+        sN.push(g.n.x,g.n.y,g.n.z);
+        sU.push(g.u,g.v);
+      });
+    }
+  }
+  if(sP.length<9) return null;
+  const g2=new THREE.BufferGeometry();
+  g2.setAttribute('position', new THREE.Float32BufferAttribute(sP,3));
+  g2.setAttribute('normal',   new THREE.Float32BufferAttribute(sN,3));
+  g2.setAttribute('uv',       new THREE.Float32BufferAttribute(sU,2));
+  g2.computeBoundingBox(); g2.computeBoundingSphere();
+  return g2;
+}
+
+/** Retire d'un décalque les triangles qui tournent le dos au projecteur.
+ *  DecalGeometry coupe la projection avec une boîte : sur un avant-bras, la
+ *  peau s'enfonce plus vite que la profondeur de cette boîte et le motif se
+ *  retrouvait tranché net, en ligne droite, bien avant la silhouette. On peut
+ *  donc donner une profondeur généreuse — le motif épouse alors le membre
+ *  jusqu'à sa silhouette — à condition d'écarter ensuite la face opposée,
+ *  sans quoi le tatouage réapparaîtrait de l'autre côté du bras. */
+function couperDos(g, axe){
+  const p=g.attributes.position, n=g.attributes.normal;
+  if(!p || !n) return g;
+  const nT=p.count/3, garder=new Uint8Array(nT), a=new THREE.Vector3();
+  let reste=0;
+  for(let t=0;t<nT;t++){
+    let s=0;
+    for(let k=0;k<3;k++){ a.fromBufferAttribute(n, t*3+k); s+=a.dot(axe); }
+    if(s>0){ garder[t]=1; reste++; }
+  }
+  if(reste===nT) return g;
+  if(!reste){ g.dispose(); return null; }
+  const cles=Object.keys(g.attributes), sortie={};
+  cles.forEach(k=>{ const at=g.attributes[k];
+    sortie[k]=new at.array.constructor(reste*3*at.itemSize); });
+  let o=0;
+  for(let t=0;t<nT;t++){
+    if(!garder[t]) continue;
+    cles.forEach(k=>{ const at=g.attributes[k], is=at.itemSize, d=sortie[k];
+      for(let j=0;j<3;j++) for(let c=0;c<is;c++) d[(o+j)*is+c]=at.array[(t*3+j)*is+c]; });
+    o+=3;
+  }
+  const ng=new THREE.BufferGeometry();
+  cles.forEach(k=>ng.setAttribute(k,
+    new THREE.BufferAttribute(sortie[k], g.attributes[k].itemSize, g.attributes[k].normalized)));
+  ng.computeBoundingBox(); ng.computeBoundingSphere();
+  g.dispose();
+  return ng;
+}
 function rebuildDecal(l){
   (l.meshes||[]).forEach(m=>{ if(m.parent) m.parent.remove(m); m.geometry.dispose(); });
   l.meshes=[];
@@ -3945,16 +4132,26 @@ function rebuildDecal(l){
   const e=new THREE.Euler().setFromQuaternion(q);
   const w=l.size/100, h=w/(l.imgAspect||1)*(l.aspect/100), dp=l.depth/100;
   const size=new THREE.Vector3(w,h,dp);
-  const radius=Math.max(w,h,dp)*0.75;
+  const axeProj=new THREE.Vector3(0,0,1).applyEuler(e).normalize();
+  // Demi-diagonale réelle de la boîte, avec un peu de marge : le voisinage
+  // extrait du corps doit la contenir entièrement, sinon le décalque
+  // s'arrête sur une frontière de cellule — encore une coupe droite.
+  const radius=0.5*Math.hypot(w,h,dp)*1.15;
   bodyMeshes.forEach(bm=>{
     if(!bm.geometry.boundingSphere) bm.geometry.computeBoundingSphere();
     const bs=bm.geometry.boundingSphere.clone().applyMatrix4(bm.matrixWorld);
     if(bs.center.distanceTo(l.pos) > bs.radius+radius) return;
     let g;
     try{
-      const src = localProxy(bm, l.pos, radius) || bm;
-      g=new DecalGeometry(src, l.pos, e, size);
+      if(l.wrap) g=decalEnroule(bm, l, w, h, (l.rot||0)*Math.PI/180);
+      // Sur une zone trop plate (dos, poitrine) il n'y a pas d'axe à suivre :
+      // on retombe sur la projection à plat plutôt que de perdre le calque.
+      if(!g){
+        const src = localProxy(bm, l.pos, radius) || bm;
+        g=couperDos(new DecalGeometry(src, l.pos, e, size), axeProj);
+      }
     }catch(err){ return; }
+    if(!g) return;
     if(!g.attributes.position || g.attributes.position.count<3){ g.dispose(); return; }
     // Sur un corps animé, la décalcomanie doit être skinnée comme la peau,
     // sinon elle reste figée pendant que le corps bouge.
@@ -4011,7 +4208,7 @@ function addLayer(flashId, pos, normal, mesh){
     ink:gv('tInk'), size:gv('tSize'), healed:gv('tHealed'),
     // profondeur de projection proportionnelle : assez pour épouser le galbe,
     // pas assez pour que le motif fasse le tour du membre et se déforme
-    depth:clamp(gv('tSize')*0.55, 2.5, 26),
+    depth:clamp(gv('tSize')*1.25, 4, 40),
     opacity:gv('tOpacity'), relief:gv('tRelief'), fresh:gv('tFresh'), align:gv('tAlign')
   });
   l.canon = pos.clone().applyMatrix4(anatXformInv);
@@ -4136,7 +4333,32 @@ function loadLayerEditor(){
   setCtl('tOpacity',l.opacity); setCtl('tHealed',l.healed); setCtl('tFresh',l.fresh); setCtl('tRelief',l.relief);
   $('tInk').value=l.ink; $('tAlign').value=l.align;
   $('tFlipH').checked=l.flipH; $('tLockSel').checked=l.locked;
+  majSegProjection(l);
   updateLayerInfo();
+}
+function majSegProjection(l){
+  const seg=$('tWrap'); if(!seg) return;
+  // L'enroulement n'a de sens que sur un membre : ailleurs le bouton reste
+  // visible mais inerte, avec l'explication en infobulle, plutôt que de
+  // laisser croire à une panne.
+  const possible = !!l && circonferenceMembre(l)!=null;
+  const bEnr=seg.querySelector('button[data-w="1"]');
+  if(bEnr){
+    bEnr.disabled=!possible;
+    bEnr.title = possible ? 'Projette le motif autour du membre : il fait le tour sans être coupé'
+                          : 'Disponible sur un bras ou une jambe — ailleurs il n\'y a pas d\'axe à suivre';
+  }
+  // On ne remet jamais le calque à plat de force : au changement de modèle
+  // les os ne sont pas encore en place, et effacer l'intention perdait le
+  // réglage. Faute d'axe, decalEnroule retombe de lui-même sur le à-plat.
+  seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (+b.dataset.w)===(l&&l.wrap?1:0)));
+  $('rowTour').style.display = (l && l.wrap) ? '' : 'none';
+}
+/** Circonférence du membre sous le calque, en centimètres. */
+function circonferenceMembre(l){
+  let rep=null;
+  try{ rep=axeMembre(new THREE.Vector3(l.pos.x,l.pos.y,l.pos.z), l.region); }catch(e){}
+  return rep ? 2*Math.PI*rep.rho*100 : null;
 }
 function editLayer(fn, heavy){
   const l=layers[selLayer]; if(!l) return;
@@ -4159,7 +4381,8 @@ function serializeLayers(){
     cp:l.canon?l.canon.toArray():null, cn:l.canonN?l.canonN.toArray():null, rg:l.region||null,
     nm:l.norm?l.norm.toArray():null, anc:l.anc||null,
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
-    fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked, visible:l.visible}));
+    fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked,
+    visible:l.visible, wrap:l.wrap||0}));
 }
 function restoreLayers(arr){
   histLock=true;
@@ -4765,7 +4988,11 @@ $('btnCutApply').addEventListener('click',()=>{
 });
 
 // --- calque sélectionné
-bind('tSize',   v=>editLayer(l=>{ l.size=v; if(!l.depthLock){ l.depth=clamp(v*0.55,2.5,26); setCtl('tDepth',l.depth); } }), v=>v.toFixed(1));
+/* La profondeur automatique valait 55 % de la largeur : sur un motif de
+   12 cm posé sur un avant-bras, la boîte de projection ne faisait que
+   6,6 cm de fond et tranchait le dessin. Les faces opposées étant désormais
+   écartées (couperDos), on peut viser large sans déborder de l'autre côté. */
+bind('tSize',   v=>editLayer(l=>{ l.size=v; if(!l.depthLock){ l.depth=clamp(v*1.25,4,40); setCtl('tDepth',l.depth); } }), v=>v.toFixed(1));
 bind('tRot',    v=>editLayer(l=>l.rot=v),     v=>Math.round(v)+'°');
 bind('tDepth',  v=>editLayer(l=>{ l.depth=v; l.depthLock=true; }), v=>v.toFixed(1));
 bind('tAspect', v=>editLayer(l=>l.aspect=v));
@@ -4774,6 +5001,21 @@ bind('tHealed', v=>editLayer(l=>l.healed=v,true));
 bind('tFresh',  v=>editLayer(l=>l.fresh=v,true));
 bind('tRelief', v=>editLayer(l=>l.relief=v,true));
 $('tInk').addEventListener('input',e=>editLayer(l=>l.ink=e.target.value,true));
+$('tWrap').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b || b.disabled) return;
+  editLayer(l=>{ l.wrap=+b.dataset.w; });
+  majSegProjection(layers[selLayer]);
+  pushHistory();
+});
+$('tTour').addEventListener('click',()=>{
+  const l=layers[selLayer]; if(!l) return;
+  const c=circonferenceMembre(l);
+  if(!c){ toast('Cette zone n\'est pas assez cylindrique pour en faire le tour', true); return; }
+  editLayer(x=>{ x.size=clamp(c,1,60); if(!x.depthLock) x.depth=clamp(x.size*1.25,4,40); });
+  setCtl('tSize',layers[selLayer].size); setCtl('tDepth',layers[selLayer].depth);
+  pushHistory();
+  toast('Largeur réglée sur '+c.toFixed(1)+' cm — le tour du membre');
+});
 $('tAlign').addEventListener('change',e=>editLayer(l=>l.align=e.target.value));
 $('tFlipH').addEventListener('change',e=>editLayer(l=>l.flipH=e.target.checked,true));
 $('tLockSel').addEventListener('change',e=>editLayer(l=>l.locked=e.target.checked));
@@ -5383,6 +5625,7 @@ async function _chargerCorpsInterne(cle){
   racine.traverse(o=>{ poseRepos.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
   // Les clips sont réancrés sur la pose de repos, relevée avant toute animation.
   g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative, racine));
+  distAvantAnim=null;
   mixer = g.animations.length ? new THREE.AnimationMixer(racine) : null;
   window.__clips = g.animations;
   clipCourant=null;
@@ -5451,6 +5694,10 @@ function figerRacineClip(clip, hauteurNative, racine){
 function majBoutonsAnim(nom){
   $$('#animBar button').forEach(b=>b.classList.toggle('on', b.dataset.a===nom));
 }
+/* Distance caméra d'avant l'animation. Le recul de cadrage ne doit être pris
+   qu'une fois : appliqué à chaque clic, il se multipliait d'une animation à
+   l'autre (1,3 puis 1,69 puis 2,2…) et le corps rapetissait sans fin. */
+let distAvantAnim=null;
 function jouerAnim(nom){
   if(!mixer) return;
   if(nom==='__stop'){
@@ -5459,7 +5706,14 @@ function jouerAnim(nom){
     if(squelette) squelette.pose();
     peauxSkinned.forEach(sm=>sm.updateMatrixWorld(true));
     majBoutonsAnim('__stop');
-    if(modelKind==='corps3d') fitView();
+    // On rend exactement le cadrage d'avant l'animation : un fitView()
+    // effacerait le zoom que l'on venait de faire sur un avant-bras.
+    if(distAvantAnim!=null){
+      const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+      camera.position.copy(controls.target).addScaledVector(dir, distAvantAnim);
+      controls.update();
+      distAvantAnim=null;
+    }
     markDirty(); return;
   }
   const cl=(window.__clips||[]).find(c=>c.name===nom);
@@ -5468,12 +5722,12 @@ function jouerAnim(nom){
   mixer.clipAction(cl).reset().play();
   clipCourant=cl; majBoutonsAnim(nom);
   // Un mouvement ample (danse, combat) étend le corps jusqu'à une fois et
-  // demie sa boîte au repos : on recule un peu pour qu'il reste entier dans
-  // le cadre, et Pause revient au cadrage normal.
-  if(modelKind==='corps3d'){
-    const d=camera.position.distanceTo(controls.target);
+  // demie sa boîte au repos : on recule une fois pour qu'il reste entier dans
+  // le cadre. Passer d'une animation à l'autre ne recule plus.
+  if(modelKind==='corps3d' && distAvantAnim==null){
+    distAvantAnim=camera.position.distanceTo(controls.target);
     const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-    camera.position.copy(controls.target).addScaledVector(dir, d*1.3);
+    camera.position.copy(controls.target).addScaledVector(dir, distAvantAnim*1.3);
     controls.update(); markDirty();
   }
 }

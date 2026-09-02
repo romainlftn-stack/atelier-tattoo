@@ -3586,7 +3586,8 @@ function addLayer(flashId, pos, normal, mesh){
   });
   l.canon = pos.clone().applyMatrix4(anatXformInv);
   l.canonN = normal.clone();
-  l.region = regionOf(l.canon);
+  l.norm = versNorm(l.canon, familleModele());
+  l.region = regionOf(depuisNorm(l.norm,'anat'));
   layers.push(l);
   refreshLayerMaterial(l);
   selLayer=layers.length-1;
@@ -3696,6 +3697,7 @@ let hist=[], histAt=-1, histLock=false;
 function serializeLayers(){
   return layers.map(l=>({id:l.id, flash:l.flash, name:l.name, p:l.pos.toArray(), n:l.normal.toArray(),
     cp:l.canon?l.canon.toArray():null, cn:l.canonN?l.canonN.toArray():null, rg:l.region||null,
+    nm:l.norm?l.norm.toArray():null,
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked, visible:l.visible}));
 }
@@ -3708,8 +3710,9 @@ function restoreLayers(arr){
       normal:new THREE.Vector3().fromArray(s.n),
       canon:s.cp?new THREE.Vector3().fromArray(s.cp):null,
       canonN:s.cn?new THREE.Vector3().fromArray(s.cn):null, region:s.rg||null,
+      norm:s.nm?new THREE.Vector3().fromArray(s.nm):null,
       meshes:[], tex:null, bump:null, mat:null, mesh:null});
-    delete l.p; delete l.n; delete l.cp; delete l.cn; delete l.rg;
+    delete l.p; delete l.n; delete l.cp; delete l.cn; delete l.rg; delete l.nm;
     layers.push(l); refreshLayerMaterial(l);
   });
   selLayer=Math.min(selLayer, layers.length-1);
@@ -3803,7 +3806,8 @@ canvas.addEventListener('pointermove', e=>{
     const h=hitBody();
     if(h){ l.pos.copy(h.point); l.normal.copy(worldNormal(h)); l.mesh=h.object;
            l.canon=l.pos.clone().applyMatrix4(anatXformInv); l.canonN=l.normal.clone();
-           l.region=regionOf(l.canon); l.offView=false; needRebuild=l; }
+           l.norm=versNorm(l.canon, familleModele());
+           l.region=regionOf(depuisNorm(l.norm,'anat')); l.offView=false; needRebuild=l; }
   } else if(drag.kind==='rot'){
     l.rot = ((drag.r0 + (e.clientX-drag.sx)*0.6 + 540) % 360) - 180;
     needRebuild=l; setCtl('tRot',l.rot);
@@ -3871,6 +3875,62 @@ const REGION_CHAINS={
   legR:['r-upper-leg','r-knee','r-ankle'],
   torso:['pelvis','spine-3','spine-1','neck','head']
 };
+/* ---------- Espace anatomique normalisé, commun à tous les modèles --------
+   Bras/Jambe vivent dans le repère MakeHuman (le sol à y=-8,18 et le sommet
+   du crâne à y=+8,40, soit 16,58 unités de stature) ; les corps entiers
+   vivent en mètres, pieds à y=0. Deux repères sans rapport : c'est pour ça
+   qu'un tatouage posé sur un bras isolé ne se retrouvait jamais sur Male,
+   Female ou Super. On mémorise donc chaque calque en coordonnées de stature
+   (0 = sol, 1 = sommet du crâne, x et z à la même échelle), ce qui se
+   retraduit dans n'importe quel modèle. */
+function familleModele(k){
+  return (k||modelKind)==='corps3d' ? 'corps3d' : 'anat';
+}
+function refNorm(fam){
+  if(fam==='corps3d') return {y0:0, h:Math.max(morph().H,1e-4)};
+  const J=ANAT&&ANAT.joints;
+  if(J && J['ground'] && J['head-2']){
+    const y0=J['ground'][1];
+    return {y0, h:Math.max(J['head-2'][1]-y0,1e-4)};
+  }
+  return {y0:0, h:1};
+}
+function versNorm(p, fam){
+  const r=refNorm(fam);
+  return new THREE.Vector3(p.x/r.h, (p.y-r.y0)/r.h, p.z/r.h);
+}
+function depuisNorm(n, fam){
+  const r=refNorm(fam);
+  return new THREE.Vector3(n.x*r.h, n.y*r.h+r.y0, n.z*r.h);
+}
+/** Point de peau le plus proche d'une cible, sur le corps actuellement
+ *  affiché. Sert de filet quand le report d'un modèle à l'autre ne tombe
+ *  pas exactement sur la surface : les proportions diffèrent (Super est
+ *  bien plus large que Female), un simple rayon rate souvent la peau. */
+function surfaceLaPlusProche(cible, distMax){
+  let bp=null, bi=-1, bm=null, bd=Infinity;
+  const v=new THREE.Vector3();
+  bodyMeshes.forEach(m=>{
+    const g=m.geometry, p=g&&g.attributes&&g.attributes.position;
+    if(!p) return;
+    m.updateMatrixWorld(true);
+    const pas = p.count>20000 ? 6 : 1;
+    for(let i=0;i<p.count;i+=pas){
+      v.fromBufferAttribute(p,i).applyMatrix4(m.matrixWorld);
+      const d=v.distanceToSquared(cible);
+      if(d<bd){ bd=d; bp=v.clone(); bi=i; bm=m; }
+    }
+  });
+  if(!bp) return null;
+  if(distMax && Math.sqrt(bd)>distMax) return null;
+  const na=bm.geometry.attributes.normal;
+  let nor;
+  if(na) nor=new THREE.Vector3().fromBufferAttribute(na,bi).transformDirection(bm.matrixWorld).normalize();
+  else   nor=new THREE.Vector3(bp.x,0,bp.z).normalize();
+  if(!isFinite(nor.x)||nor.lengthSq()<1e-6) nor.set(0,0,1);
+  return {point:bp, normal:nor, mesh:bm};
+}
+
 function regionOf(canon){
   if(!ANAT || !canon) return 'torso';
   const J=ANAT.joints;
@@ -3905,28 +3965,42 @@ function viewShows(region){
     exactement sur la surface courante (morphologie, pose, vue). */
 function resnapLayers(){
   const OUT=0.30;
+  const fam=familleModele();
   layers.forEach(l=>{
-    if(l.canon && !l.region) l.region=regionOf(l.canon);
-    if(l.canon && !viewShows(l.region)){        // membre non affiché : on conserve tel quel
+    // Calques d'avant l'espace normalisé : on les convertit à la volée.
+    if(!l.norm && l.canon) l.norm=versNorm(l.canon,'anat');
+    if(l.norm) l.region=regionOf(depuisNorm(l.norm,'anat'));
+    if(l.norm && !viewShows(l.region)){        // membre non affiché : on conserve tel quel
       l.offView=true; rebuildDecal(l); return;
     }
-    if(l.canon){
-      l.pos.copy(l.canon).applyMatrix4(anatXform);
+    // Position attendue sur le modèle courant, déduite de la stature.
+    if(l.norm){
+      const cible=depuisNorm(l.norm, fam);
+      l.pos.copy(fam==='corps3d' ? cible : cible.clone().applyMatrix4(anatXform));
       if(l.canonN) l.normal.copy(l.canonN);
     }
     const o=l.pos.clone().addScaledVector(l.normal, OUT);
     ray.set(o, l.normal.clone().negate());
     const h=ray.intersectObjects(bodyMeshes,false);
-    // on n'accepte que si la surface est bien là où on l'attend : sinon le rayon
-    // accrocherait un membre voisin et le calque migrerait
     if(h.length && Math.abs(h[0].distance-OUT)<0.10){
       l.pos.copy(h[0].point); l.normal.copy(worldNormal(h[0])); l.mesh=h[0].object;
-      l.canon = l.pos.clone().applyMatrix4(anatXformInv);
-      l.canonN = l.normal.clone();
-      l.region = regionOf(l.canon);
-      l.offView = false;
+      l.offView=false;
     } else {
-      l.offView = true;
+      // Report d'un modèle à l'autre : les proportions ne coïncident pas
+      // (Super est bien plus large que Female), le rayon rate donc souvent la
+      // peau. On accroche alors le point de peau le plus proche — le motif
+      // atterrit au bon endroit anatomique au lieu de disparaître.
+      const s=surfaceLaPlusProche(l.pos, refNorm(fam).h*0.35);
+      if(s){
+        l.pos.copy(s.point); l.normal.copy(s.normal); l.mesh=s.mesh;
+        l.offView=false;
+      } else l.offView=true;
+    }
+    if(!l.offView){
+      l.canon  = l.pos.clone().applyMatrix4(anatXformInv);
+      l.canonN = l.normal.clone();
+      // On ne réécrit pas l.norm : elle reste l'ancrage anatomique d'origine,
+      // sinon chaque aller-retour entre deux corps ferait dériver le motif.
     }
     rebuildDecal(l);
   });

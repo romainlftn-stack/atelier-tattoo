@@ -1859,6 +1859,79 @@ function refreshSkinLook(){
   sssUniforms.uSSSAmount.value = gv('mSSS')/100*0.55;
   const c=new THREE.Color(SKIN_TONES[skinToneIdx]);
   sssUniforms.uSSSColor.value.setRGB(clamp(c.r*1.15,0,1), c.g*0.42, c.b*0.34);
+  majPeauCorps();
+}
+
+/* ---------- Peau des corps entiers (Male / Female / Super) ----------------
+   Les textures livrées avec ces trois modèles sont des atlas de
+   photogrammétrie : chaque île UV porte sa propre dominante (mains roses,
+   dos mauve, torse beige) et des bavures en éventail sur ses bords. Vérifié
+   sur la source d'origine en 8192×8192 : le défaut est peint dans le fichier,
+   les UV du maillage sont propres (1,7 % d'arêtes de couture, normal). Aucun
+   remapping ne peut donc les rattraper. On rend la peau comme sur Bras et
+   Jambe : teinte unie pilotée par la carnation, plus un grain fin tuilé. */
+let _grainCorps=null;
+function grainCorps(){
+  if(_grainCorps) return _grainCorps;
+  const S=256, cv=mkCanvas(S,S), cx=cv.getContext('2d');
+  const img=cx.createImageData(S,S), D=img.data;
+  for(let j=0;j<S;j++) for(let i=0;i<S;i++){
+    const o=(j*S+i)*4;
+    const fin  = fbmT(i/S, j/S, 3, 24, 24);
+    const large= fbmT(i/S, j/S, 3, 5, 5);
+    const v = clamp(233 + (fin-0.5)*22 + (large-0.5)*13, 0, 255);
+    D[o]=D[o+1]=D[o+2]=v; D[o+3]=255;
+  }
+  cx.putImageData(img,0,0);
+  _grainCorps=new THREE.CanvasTexture(cv);
+  _grainCorps.wrapS=_grainCorps.wrapT=THREE.RepeatWrapping;
+  _grainCorps.repeat.set(10,10);
+  _grainCorps.colorSpace=THREE.SRGBColorSpace;
+  _grainCorps.anisotropy=8;
+  return _grainCorps;
+}
+let _matCorps=null;
+function matPeauCorps(){
+  if(_matCorps) return _matCorps;
+  _matCorps=new THREE.MeshPhysicalMaterial({
+    color:new THREE.Color(SKIN_TONES[skinToneIdx]),
+    map:grainCorps(), roughness:0.62, metalness:0.0,
+    sheen:0.45, sheenRoughness:0.85, sheenColor:new THREE.Color(0xffc8ae),
+    clearcoat:0.06, clearcoatRoughness:0.6, side:THREE.FrontSide
+  });
+  _matCorps.onBeforeCompile = (sh)=>{
+    Object.assign(sh.uniforms, sssUniforms);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('void main() {', `
+        uniform float uSSSAmount; uniform float uSSSPower;
+        uniform vec3 uSSSColor; uniform vec3 uSSSDir;
+        void main() {`)
+      .replace('#include <dithering_fragment>', `
+        #include <dithering_fragment>
+        {
+          vec3 Lv = normalize(uSSSDir);
+          vec3 Vv = normalize(vViewPosition);
+          vec3 Nn = normalize(normal);
+          float back  = pow(clamp(dot(Vv, -Lv), 0.0, 1.0), uSSSPower);
+          float wrapD = clamp((dot(Nn, Lv) + 0.42) / 1.42, 0.0, 1.0) - clamp(dot(Nn, Lv), 0.0, 1.0);
+          float amt   = uSSSAmount * (back * 0.85 + wrapD * 0.75);
+          gl_FragColor.rgb += uSSSColor * diffuseColor.rgb * amt;
+        }`);
+  };
+  _matCorps.customProgramCacheKey = ()=>'skin-sss';
+  return _matCorps;
+}
+/** La carnation et le sébum pilotent aussi les corps entiers. */
+function majPeauCorps(){
+  if(!_matCorps) return;
+  const oil=gv('mOil')/100, tint=gv('mTint')/100;
+  const base=new THREE.Color(SKIN_TONES[skinToneIdx]);
+  const hsl={}; base.getHSL(hsl);
+  base.setHSL(clamp(hsl.h+tint*0.045,0,1), clamp(hsl.s*(1+tint*0.55),0,1), clamp(hsl.l*(1-tint*0.10),0,1));
+  _matCorps.color.copy(base);
+  _matCorps.roughness = lerp(0.70,0.44,oil);
+  _matCorps.clearcoat = lerp(0.02,0.12,oil);
+  markDirty();
 }
 
 /* --- micro-relief générique, appliqué à l'encre des tatouages ------------- */
@@ -2710,21 +2783,73 @@ function buildModel(){
  *  la boîte LOCALE de chaque géométrie, pas toujours recalculée après le
  *  passage par Mixamo — d'où un cadrage tantôt trop large, tantôt trop
  *  serré selon le corps. On mesure ici les sommets réellement posés. */
+/** Boîte englobante mesurée sur les sommets réels de tous les maillages d'un
+ *  sous-arbre, chacun ramené en repère monde par sa propre matrice. C'est la
+ *  seule mesure fiable ici : Box3.setFromObject se fie à geometry.boundingBox,
+ *  qui ignore le skinning et la matrice de liaison, et donnait des hauteurs
+ *  fausses sur Female (quatre maillages) — d'où son cadrage trop lointain. */
+function boiteReelle(obj){
+  const b=new THREE.Box3(), v=new THREE.Vector3();
+  obj.updateMatrixWorld(true);
+  obj.traverse(o=>{
+    const g=o.geometry;
+    if(!o.isMesh && !o.isSkinnedMesh) return;
+    if(!g || !g.attributes || !g.attributes.position) return;
+    const p=g.attributes.position, m=o.matrixWorld;
+    // Un pas d'échantillonnage suffit largement pour une enveloppe : sur
+    // 190 000 sommets, un sur huit donne la même boîte au millimètre près.
+    const pas = p.count>20000 ? 8 : 1;
+    for(let i=0;i<p.count;i+=pas){
+      v.fromBufferAttribute(p,i).applyMatrix4(m);
+      b.expandByPoint(v);
+    }
+    for(let i=p.count-1;i>=Math.max(0,p.count-64);i--){   // et les tout derniers
+      v.fromBufferAttribute(p,i).applyMatrix4(m); b.expandByPoint(v);
+    }
+  });
+  return b;
+}
+/** Lisse les normales d'un maillage non indexé en soudant par position.
+ *  Les corps sortis de Mixamo arrivent à plat : 80 % des sommets partagés y
+ *  portent des normales différentes, ce qui fait ressortir chaque facette et
+ *  donne cet aspect « taillé à la serpe » sur les cuisses et les bras. On
+ *  moyenne les normales des sommets coïncidents — la silhouette ne bouge pas,
+ *  seul l'éclairage devient continu. */
+function lisserNormales(geom){
+  const p=geom.attributes.position, n=geom.attributes.normal;
+  if(!p || !n) return;
+  const acc=new Map();
+  const cle=i=>Math.round(p.getX(i)*1e4)+'_'+Math.round(p.getY(i)*1e4)+'_'+Math.round(p.getZ(i)*1e4);
+  for(let i=0;i<p.count;i++){
+    const k=cle(i), v=acc.get(k);
+    if(v){ v[0]+=n.getX(i); v[1]+=n.getY(i); v[2]+=n.getZ(i); }
+    else acc.set(k,[n.getX(i),n.getY(i),n.getZ(i)]);
+  }
+  for(let i=0;i<p.count;i++){
+    const v=acc.get(cle(i));
+    const l=Math.hypot(v[0],v[1],v[2]) || 1;
+    n.setXYZ(i, v[0]/l, v[1]/l, v[2]/l);
+  }
+  n.needsUpdate=true;
+}
 function boiteCorpsSkinne(){
   if(!peauxSkinned || !peauxSkinned.length) return null;
   const b=new THREE.Box3();
-  peauxSkinned.forEach(sm=>{
-    sm.updateMatrixWorld(true);
-    sm.geometry.computeBoundingBox();
-    b.union(sm.geometry.boundingBox.clone().applyMatrix4(sm.matrixWorld));
-  });
+  peauxSkinned.forEach(sm=>b.union(boiteReelle(sm)));
   return b.isEmpty() ? null : b;
 }
 function fitView(anim=true){
   const bSkin = modelKind==='corps3d' ? boiteCorpsSkinne() : null;
   if(bSkin) modelBox.copy(bSkin); else modelBox.setFromObject(root);
   const c=modelBox.getCenter(new THREE.Vector3()), sz=modelBox.getSize(new THREE.Vector3());
-  const r=Math.max(sz.x,sz.y*0.62,sz.z)*0.5;
+  // Sur un corps entier, le cadrage se règle sur la stature, pas sur
+  // l'envergure : Female est livrée bras en croix, Male bras le long du corps.
+  // À largeur prise en compte, la première était cadrée 40 % plus loin que le
+  // second alors que les deux mesurent 1,78 m — d'où l'impression qu'elle
+  // était « plus petite ». Les trois corps sont désormais cadrés à l'identique.
+  const r = modelKind==='corps3d'
+    ? Math.max(sz.y*0.60, sz.x*0.42, sz.z*0.42)*0.5
+    : Math.max(sz.x, sz.y*0.62, sz.z)*0.5;
   const dist = r / Math.tan(camera.fov*Math.PI/360) * 1.9;
   controls.target.copy(c);
   const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
@@ -4414,7 +4539,7 @@ const CORPS = {
 };
 
 let corpsActif=null, mixer=null, clipCourant=null, horlogeAnim=new THREE.Clock();
-let osSuivi=null, osSuiviRef=null;
+
 let squelette=null, peauxSkinned=[], bindProxies=[], poseRepos=[];
 const texCache=new Map();
 
@@ -4484,54 +4609,31 @@ async function _chargerCorpsInterne(cle){
   peauxSkinned=[]; bindProxies=[]; squelette=null;
 
   const racine=g.scene;
-  const aAttendreCetteFois=[];   // seulement les textures de CE chargement
+  // Un seul matériau propre, partagé : pas de texture à télécharger, donc
+  // pas d'attente réseau ni de premier rendu noir à rattraper.
+  const matCorps=matPeauCorps();
   racine.traverse(o=>{
     if(!o.isMesh && !o.isSkinnedMesh) return;
-    const nb=o.geometry.attributes.position.count;
-    let t=def.tex;
-    if(def.parSommets){
-      const partie=def.parSommets[nb];
-      t = partie ? def.texParPartie(partie) : null;
-    }
     // L'export FBX -> GLB perd les normales : sans elles aucun éclairage n'est
     // calculé et le corps s'affiche entièrement noir. On les reconstruit ici,
     // dans la pose de repos — le shader de skinning les déformera ensuite.
     if(!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-    const mat=new THREE.MeshPhysicalMaterial({ metalness:0, roughness:0.78, side:THREE.FrontSide });
-    if(t){
-      if(t.map)          mat.map          = chargerTexture(t.map, true, aAttendreCetteFois);
-      if(t.normalMap)    mat.normalMap    = chargerTexture(t.normalMap,false, aAttendreCetteFois);
-      if(t.roughnessMap) mat.roughnessMap = chargerTexture(t.roughnessMap,false, aAttendreCetteFois);
-    } else { mat.color.set(0xd8b49c); }
-    mat.needsUpdate=true;
-    o.material=mat; o.castShadow=o.receiveShadow=true;
+    lisserNormales(o.geometry);
+    o.material=matCorps; o.castShadow=o.receiveShadow=true;
     if(o.isSkinnedMesh){ peauxSkinned.push(o); if(!squelette) squelette=o.skeleton; }
   });
-  // Le tout premier rendu d'un matériau physique sur un SkinnedMesh de cette
-  // taille (des centaines de milliers de sommets, un squelette à 65 os),
-  // dans une session qui n'a encore jamais rendu un tel maillage, échoue
-  // silencieusement : le corps reste entièrement noir bien que la scène soit
-  // par ailleurs correcte (texture chargée, lumières bien orientées). Un
-  // second passage identique, une fois les textures réellement chargées,
-  // fonctionne systématiquement — on le rejoue donc nous-mêmes, une fois,
-  // en silence, plutôt que d'imposer ce contournement à l'utilisateur.
-  await Promise.all(aAttendreCetteFois);
-  markDirty(); renderer.render(scene,camera);
-  await new Promise(r=>requestAnimationFrame(r));
-  peauxSkinned.forEach(sm=>{
-    const anc=sm.material;
-    sm.material=new THREE.MeshPhysicalMaterial({
-      map:anc.map, normalMap:anc.normalMap||undefined, roughnessMap:anc.roughnessMap||undefined,
-      color:anc.color, metalness:0, roughness:0.78, side:THREE.FrontSide });
-  });
-  markDirty(); renderer.render(scene,camera);
+  majPeauCorps();
 
-  // mise à l'échelle sur la stature réglée, puis pose au sol
+  // Mise à l'échelle sur la stature réglée, puis pose au sol. Les boîtes sont
+  // mesurées sommet par sommet dans la pose de repos : Box3.setFromObject ne
+  // donne pas un résultat fiable sur un SkinnedMesh (elle ignore le skinning),
+  // ce qui cadrait Female nettement plus loin que Male et Super.
   racine.updateMatrixWorld(true);
-  let bb=new THREE.Box3().setFromObject(racine);
-  const H=morph().H, f=H/Math.max(bb.max.y-bb.min.y,1e-4);
+  let bb=boiteReelle(racine);
+  const hauteurNative=Math.max(bb.max.y-bb.min.y,1e-4);
+  const H=morph().H, f=H/hauteurNative;
   racine.scale.setScalar(f); racine.updateMatrixWorld(true);
-  bb=new THREE.Box3().setFromObject(racine);
+  bb=boiteReelle(racine);
   racine.position.y-=bb.min.y;
   racine.position.x-=(bb.min.x+bb.max.x)/2;
   racine.position.z-=(bb.min.z+bb.max.z)/2;
@@ -4551,6 +4653,7 @@ async function _chargerCorpsInterne(cle){
   // sous-arbre pour pouvoir revenir exactement à la pose de repos.
   poseRepos=[];
   racine.traverse(o=>{ poseRepos.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
+  g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative));
   mixer = g.animations.length ? new THREE.AnimationMixer(racine) : null;
   window.__clips = g.animations;
   clipCourant=null;
@@ -4558,7 +4661,7 @@ async function _chargerCorpsInterne(cle){
   majBoutonsAnim('__stop');
 
   anatXform.identity(); anatXformInv.identity();
-  modelBox.setFromObject(racine);
+  modelBox.copy(boiteReelle(racine));
   pivot.copy(modelBox.getCenter(new THREE.Vector3()));
   // fitView() conserve l'angle de la caméra précédente ; en venant d'un Bras
   // ou d'une Jambe cadrés de près, cet angle n'a plus de sens une fois le
@@ -4571,13 +4674,42 @@ async function _chargerCorpsInterne(cle){
   toast(def.nom+' — '+g.animations.length+' animation(s)');
 }
 
+/** Neutralise le déplacement d'ensemble d'un clip Mixamo.
+ *  Ces animations embarquent la translation du bassin : marcher fait vraiment
+ *  avancer le personnage, courir l'envoie hors champ, combattre le rapproche
+ *  de la caméra (« il grossit »). On fige donc X et Z du bassin sur leur
+ *  première valeur — le corps s'anime sur place — en gardant Y, qui n'est que
+ *  le ballant vertical naturel de la démarche. Corriger la caméra à la volée
+ *  ne suffisait pas : elle suivait avec un temps de retard et le cadrage
+ *  dérivait quand même. */
+function figerRacineClip(clip, hauteurNative){
+  const ampMax = (hauteurNative||0)*0.09;   // ballant vertical toléré
+  clip.tracks.forEach(tr=>{
+    if(!/\.position$/.test(tr.name)) return;
+    if(!/hips|root|racine|bassin/i.test(tr.name)) return;
+    const v=tr.values;
+    if(v.length<3) return;
+    const x0=v[0], y0=v[1], z0=v[2];
+    let dev=0;
+    for(let i=1;i<v.length;i+=3) dev=Math.max(dev, Math.abs(v[i]-y0));
+    // La danse comporte des sauts d'une soixantaine de centimètres : on les
+    // tasse pour que le corps reste dans le cadre, sans figer le mouvement.
+    const k = (ampMax>0 && dev>ampMax) ? ampMax/dev : 1;
+    for(let i=0;i<v.length;i+=3){
+      v[i]=x0; v[i+2]=z0;
+      if(k!==1) v[i+1]=y0+(v[i+1]-y0)*k;
+    }
+  });
+  return clip;
+}
+
 function majBoutonsAnim(nom){
   $$('#animBar button').forEach(b=>b.classList.toggle('on', b.dataset.a===nom));
 }
 function jouerAnim(nom){
   if(!mixer) return;
   if(nom==='__stop'){
-    mixer.stopAllAction(); clipCourant=null; osSuivi=null; osSuiviRef=null;
+    mixer.stopAllAction(); clipCourant=null;
     poseRepos.forEach(([o,p,q,e])=>{ o.position.copy(p); o.quaternion.copy(q); o.scale.copy(e); });
     if(squelette) squelette.pose();
     peauxSkinned.forEach(sm=>sm.updateMatrixWorld(true));
@@ -4588,12 +4720,6 @@ function jouerAnim(nom){
   mixer.stopAllAction();
   mixer.clipAction(cl).reset().play();
   clipCourant=cl; majBoutonsAnim(nom);
-  // Repère de suivi : l'os du bassin, pour recentrer la caméra à chaque
-  // image pendant la lecture (voir tick()). Sans ça, la moindre dérive
-  // verticale résiduelle de l'animation fait sortir le corps du cadre.
-  osSuivi=null; osSuiviRef=null;
-  if(squelette) squelette.bones.forEach(b=>{ if(!osSuivi && /hips$/i.test(b.name)) osSuivi=b; });
-  if(osSuivi){ osSuivi.updateMatrixWorld(true); osSuiviRef=new THREE.Vector3().setFromMatrixPosition(osSuivi.matrixWorld); }
 }
 $$('#animBar button').forEach(b=>b.addEventListener('click',()=>jouerAnim(b.dataset.a)));
 let dernierCorps3D='male';
@@ -4741,16 +4867,10 @@ function tick(){
   // Une animation en cours force le rendu : sans cela la boucle « à la demande »
   // figerait le personnage dès que la caméra ne bouge plus.
   if(mixer && clipCourant){
+    // Le déplacement d'ensemble est retiré des clips au chargement
+    // (figerRacineClip) : le corps s'anime sur place, la caméra n'a donc
+    // plus à le poursuivre — elle reste exactement où l'utilisateur l'a mise.
     mixer.update(horlogeAnim.getDelta()); dirty=true;
-    if(osSuivi && osSuiviRef){
-      osSuivi.updateMatrixWorld(true);
-      const p=new THREE.Vector3().setFromMatrixPosition(osSuivi.matrixWorld);
-      const derive=p.clone().sub(osSuiviRef);
-      if(derive.lengthSq()>1e-8){
-        controls.target.add(derive); camera.position.add(derive);
-        osSuiviRef.copy(p);
-      }
-    }
   }
   else if(horlogeAnim) horlogeAnim.getDelta();
   if(needRebuild && performance.now()-lastRebuild>26){
@@ -4832,6 +4952,7 @@ ldProgress(.6,'Construction de l’anatomie…');
   window.ATELIER = {THREE, scene, camera, renderer, controls, get lights(){return lights;}, get layers(){return layers;},
     get flashes(){return flashes;}, get bodyMeshes(){return bodyMeshes;}, buildModel, fitView, setView,
     get ANAT(){return ANAT;}, poseFingers, morphWeights, anatGeometry, syncLight, skinMats, refreshSkinMaps, loadFiles, addFlash, adoptModel, deformImported, localProxy, setMode, addLayer, selectLayer, rebuildDecal, resnapLayers,
+    get mixer(){return mixer;}, get clipCourant(){return clipCourant;}, get peauxSkinned(){return peauxSkinned;}, get corpsActif(){return corpsActif;},
     render:()=>renderer.render(scene,camera)};
   if(/[?&]demo/.test(location.search)) loadSample(true);
   setTimeout(()=>{ $('loader').classList.add('gone');

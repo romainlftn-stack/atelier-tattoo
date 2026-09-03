@@ -4321,15 +4321,24 @@ function decalSurPeau(bm, l, w, h, rot){
     }
     return id;
   }
+  /* Les triangles dégénérés — deux sommets confondus après soudure — sont
+     écartés d'emblée. Mis à plat, leur troisième point retombe sur l'arête et
+     l'on obtient un triangle d'aire nulle portant pourtant des coordonnées
+     étalées : c'est ce qui déformait le motif jusqu'à trois cents fois sur
+     les jambes de Femme. */
   const TA=new Int32Array(nPr*3);
+  let nT=0;
   for(let q=0;q<nPr;q++){
     const t=_pxBuf[q];
     const i0=IA?IA[t*3]:t*3, i1=IA?IA[t*3+1]:t*3+1, i2=IA?IA[t*3+2]:t*3+2;
-    TA[q*3]=vid(i0); TA[q*3+1]=vid(i1); TA[q*3+2]=vid(i2);
+    const a=vid(i0), b=vid(i1), c=vid(i2);
+    if(a===b || b===c || c===a) continue;
+    TA[nT*3]=a; TA[nT*3+1]=b; TA[nT*3+2]=c; nT++;
   }
+  if(!nT) return null;
   const NB=PX.length;
   const are=new Map();
-  for(let ti=0;ti<nPr;ti++){
+  for(let ti=0;ti<nT;ti++){
     for(let k=0;k<3;k++){
       const a=TA[ti*3+k], b=TA[ti*3+(k+1)%3];
       const key = a<b ? a*NB+b : b*NB+a;
@@ -4341,7 +4350,7 @@ function decalSurPeau(bm, l, w, h, rot){
   // triangle de départ : le plus proche du point posé
   let seed=-1, bd=1e30;
   const Px=P.x, Py=P.y, Pz=P.z;
-  for(let ti=0;ti<nPr;ti++){
+  for(let ti=0;ti<nT;ti++){
     const a=TA[ti*3], b=TA[ti*3+1], c=TA[ti*3+2];
     const dx=(PX[a]+PX[b]+PX[c])/3-Px, dy=(PY[a]+PY[b]+PY[c])/3-Py, dz=(PZ[a]+PZ[b]+PZ[c])/3-Pz;
     const d=dx*dx+dy*dy+dz*dz; if(d<bd){ bd=d; seed=ti; }
@@ -4366,97 +4375,77 @@ function decalSurPeau(bm, l, w, h, rot){
   const ax=ex.clone().multiplyScalar(cr).addScaledVector(ey, sr);
   const ay=ey.clone().multiplyScalar(cr).addScaledVector(ex, -sr);
 
-  const U=new Float64Array(NB).fill(NaN);
-  const V=new Float64Array(NB).fill(NaN);
-  [s0,s1,s2].forEach(i=>{ const dx=PX[i]-Px, dy=PY[i]-Py, dz=PZ[i]-Pz;
-    U[i]=dx*ax.x+dy*ax.y+dz*ax.z; V[i]=dx*ay.x+dy*ay.y+dz*ay.z; });
-
-  /** Pose le sommet `c` à plat, sachant l'arête (a,b) déjà posée. Deux
-   *  solutions symétriques : on garde celle opposée au sommet déjà connu. */
-  function poser(c,a,b,opp){
-    const Ax=U[a], Ay=V[a], dx=U[b]-Ax, dy=V[b]-Ay, L=Math.sqrt(dx*dx+dy*dy);
-    if(!(L>1e-12)){ U[c]=Ax; V[c]=Ay; return; }
+  /* Coordonnées à plat portées par les COINS des triangles, et non par les
+     sommets. Un sommet partagé par plusieurs triangles n'a pas de position à
+     plat unique dès que la peau est courbe : lui en imposer une — celle du
+     premier chemin qui l'atteint — obligeait les triangles suivants à s'y
+     conformer, et ils se cisaillaient. Un cercle posé sur l'épaule de Super
+     en ressortait en goutte. Chaque triangle est désormais déplié à partir de
+     son voisin par l'arête qu'ils partagent : ses trois côtés gardent leur
+     longueur exacte, donc sa forme. Les triangles voisins peuvent alors se
+     décaler de quelques centièmes de millimètre — invisible — au lieu de
+     déformer le dessin. */
+  const TU=new Float64Array(nT*3), TV=new Float64Array(nT*3);
+  const dw=w*0.5, dh=h*0.5;
+  const vu=new Uint8Array(nT); vu[seed]=1;
+  const file=new Int32Array(nT); let fq=0, fw=0; file[fw++]=seed;
+  const garde=new Int32Array(nT); let ng=0;
+  for(let k=0;k<3;k++){
+    const i=TA[seed*3+k], dx=PX[i]-Px, dy=PY[i]-Py, dz=PZ[i]-Pz;
+    TU[seed*3+k]=dx*ax.x+dy*ax.y+dz*ax.z;
+    TV[seed*3+k]=dx*ay.x+dy*ay.y+dz*ay.z;
+  }
+  /** Déplie `tj` à plat à partir de l'arête (a,b) déjà posée en (ua,va)-(ub,vb).
+   *  Des deux solutions symétriques on garde celle opposée au triangle
+   *  d'origine, dont le sommet libre est en (oU,oV). */
+  function poserTriangle(tj, a, b, ua,va, ub,vb, oU,oV){
+    let ia=-1, ib=-1;
+    for(let k=0;k<3;k++){ const v=TA[tj*3+k]; if(v===a) ia=k; else if(v===b) ib=k; }
+    if(ia<0 || ib<0 || ia===ib) return false;
+    const ic=3-ia-ib, c=TA[tj*3+ic];
+    if(c===a || c===b) return false;
+    const dx=ub-ua, dy=vb-va, L=Math.sqrt(dx*dx+dy*dy);
+    if(!(L>1e-12)) return false;
     const ux=dx/L, uy=dy/L, nx=-uy, ny=ux;
     const ra=dist3(c,a), rb=dist3(c,b);
     const x=(ra*ra - rb*rb + L*L)/(2*L);
     const y=Math.sqrt(Math.max(ra*ra - x*x, 0));
-    const px=Ax+ux*x, py=Ay+uy*x;
-    const cote=(U[opp]-Ax)*nx + (V[opp]-Ay)*ny;
-    const s=(cote>0)? -y : y;
-    U[c]=px+nx*s; V[c]=py+ny*s;
+    const px=ua+ux*x, py=va+uy*x;
+    const cote=(oU-ua)*nx + (oV-va)*ny;
+    const sg=(cote>0) ? -y : y;
+    TU[tj*3+ia]=ua; TV[tj*3+ia]=va;
+    TU[tj*3+ib]=ub; TV[tj*3+ib]=vb;
+    TU[tj*3+ic]=px+nx*sg; TV[tj*3+ic]=py+ny*sg;
+    return true;
   }
-
-  const dw=w*0.5, dh=h*0.5;
-  const vu=new Uint8Array(nPr); vu[seed]=1;
-  const file=new Int32Array(nPr); let fq=0, fw=0; file[fw++]=seed;
-  const garde=new Int32Array(nPr); let ng=0;
-  /* Garde-fou contre les repliements. Le dépliage conserve les longueurs :
-     la distance d'un sommet au point posé, mesurée à plat, vaut donc son
-     chemin le long de la peau, toujours plus long que la corde qui les
-     sépare dans l'espace. Quand cette inégalité s'inverse, c'est que le
-     dépliage s'est replié sur lui-même ou a sauté sur une surface qui n'est
-     voisine que par contact — un bras collé au torse, deux pièces du corps
-     qui se touchent. C'est ce qui semait des lambeaux de motif à distance.
-     On refuse alors le triangle, et on cesse d'avancer par là. */
-  const coherent=(i)=>{
-    const du=Math.sqrt(U[i]*U[i]+V[i]*V[i]);
+  /* Seul garde-fou nécessaire : un chemin le long de la peau est toujours
+     plus long que la corde qui sépare ses extrémités. Quand l'inégalité
+     s'inverse, le dépliage a sauté sur une surface qui n'est voisine que par
+     contact — un bras collé au torse. On refuse, et on n'avance plus par là. */
+  const coherent=(u,v,i)=>{
+    const du=Math.sqrt(u*u+v*v);
     const dx=PX[i]-Px, dy=PY[i]-Py, dz=PZ[i]-Pz;
     return Math.sqrt(dx*dx+dy*dy+dz*dz) <= du*1.12 + 0.006;
   };
-  /* Second garde-fou, local celui-là. Chaque sommet n'est mis à plat qu'une
-     fois, par le premier chemin qui l'atteint ; quand le front de progression
-     fait le tour du membre et se rejoint à l'arrière, les triangles de
-     raccord héritent de deux placements incompatibles : ils se retournent,
-     et le motif s'y étire. Le retournement est le signe sûr — on le lit sur
-     l'orientation du triangle mis à plat, comparée à celle du départ. Une
-     tolérance de longueur large l'accompagne, pour les triangles simplement
-     écrasés sans s'être retournés.
-     Un seuil serré sur les seules longueurs ne convenait pas : sur une peau
-     courbe, deux chemins de dépliage n'aboutissent jamais tout à fait au
-     même endroit — c'est la courbure elle-même — et des triangles isolés se
-     trouvaient rejetés un peu partout, laissant de petits trous dans le
-     dessin. */
-  const s0t=TA[seed*3], s1t=TA[seed*3+1], s2t=TA[seed*3+2];
-  const signeRef=Math.sign((U[s1t]-U[s0t])*(V[s2t]-V[s0t])-(U[s2t]-U[s0t])*(V[s1t]-V[s0t])) || 1;
-  const memeLongueur=(i,j)=>{
-    const du=Math.hypot(U[i]-U[j], V[i]-V[j]);
-    const dx=PX[i]-PX[j], dy=PY[i]-PY[j], dz=PZ[i]-PZ[j];
-    const d3=Math.sqrt(dx*dx+dy*dy+dz*dz);
-    // 80 % : mesuré comme le meilleur compromis. À 10 %, trente-six poses sur
-    // cinquante-neuf perdaient un morceau du dessin ; à 80 %, plus aucune —
-    // hors la main, où le motif déborde réellement du corps — et la
-    // distorsion reste sous 1,13, invisible à l'œil.
-    return Math.abs(du-d3) <= d3*0.80 + 1e-5;
-  };
   while(fq<fw){
     const ti=file[fq++];
-    const t0=TA[ti*3], t1=TA[ti*3+1], t2=TA[ti*3+2];
-    const u0=U[t0],u1=U[t1],u2=U[t2], v0=V[t0],v1=V[t1],v2=V[t2];
+    const u0=TU[ti*3], u1=TU[ti*3+1], u2=TU[ti*3+2];
+    const v0=TV[ti*3], v1=TV[ti*3+1], v2=TV[ti*3+2];
     if(u0!==u0 || u1!==u1 || u2!==u2) continue;
-    // Saut sur une surface voisine : on refuse et on n'avance plus par là.
-    if(!coherent(t0)||!coherent(t1)||!coherent(t2)) continue;
-    // Hors du cadre : on ne le garde pas et on ne propage pas au-delà — le
-    // cadre étant convexe, rien d'utile ne se trouve derrière.
+    if(!coherent(u0,v0,TA[ti*3]) || !coherent(u1,v1,TA[ti*3+1]) || !coherent(u2,v2,TA[ti*3+2])) continue;
     if((u0<-dw&&u1<-dw&&u2<-dw)||(u0>dw&&u1>dw&&u2>dw)) continue;
     if((v0<-dh&&v1<-dh&&v2<-dh)||(v0>dh&&v1>dh&&v2>dh)) continue;
-    /* Triangle mal déplié : on ne le dessine pas, mais on continue d'avancer
-       au travers. L'arrêter net coupait aussi tout ce qui se trouve derrière
-       lui, et c'est ainsi qu'un simple accident laissait un pan du motif
-       manquant. */
-    const retourne=Math.sign((u1-u0)*(v2-v0)-(u2-u0)*(v1-v0))!==signeRef;
-    const bon = !retourne && memeLongueur(t0,t1) && memeLongueur(t1,t2) && memeLongueur(t2,t0);
-    if(bon) garde[ng++]=ti;
+    garde[ng++]=ti;
     for(let k=0;k<3;k++){
-      const a=TA[ti*3+k], b=TA[ti*3+(k+1)%3], opp=TA[ti*3+(k+2)%3];
+      const ka=k, kb=(k+1)%3, kc=(k+2)%3;
+      const a=TA[ti*3+ka], b=TA[ti*3+kb];
       const lst=are.get(a<b?a*NB+b:b*NB+a);
       if(lst===undefined) continue;
       for(let z=0;z<lst.length;z++){
         const tj=lst[z];
         if(tj===ti || vu[tj]) continue;
-        const c0=TA[tj*3], c1=TA[tj*3+1], c2=TA[tj*3+2];
-        const c = (c0!==a&&c0!==b) ? c0 : ((c1!==a&&c1!==b) ? c1 : c2);
-        if(c===a||c===b) continue;
-        if(U[c]!==U[c]) poser(c,a,b,opp);
+        if(!poserTriangle(tj, a, b, TU[ti*3+ka], TV[ti*3+ka], TU[ti*3+kb], TV[ti*3+kb],
+                          TU[ti*3+kc], TV[ti*3+kc])) continue;
         vu[tj]=1; file[fw++]=tj;
       }
     }
@@ -4474,11 +4463,9 @@ function decalSurPeau(bm, l, w, h, rot){
   for(let z=0;z<ng;z++){
     const ti=garde[z];
     const a=TA[ti*3], b=TA[ti*3+1], c=TA[ti*3+2];
-    const ua=U[a]/w+0.5, va=V[a]/h+0.5;
-    const ub=U[b]/w+0.5, vb=V[b]/h+0.5;
-    const uc=U[c]/w+0.5, vc=V[c]/h+0.5;
-    // Cas courant : le triangle tient entièrement dans le cadre, rien à
-    // découper — c'est la grande majorité, et l'y faire passer coûtait cher.
+    const ua=TU[ti*3]/w+0.5,   va=TV[ti*3]/h+0.5;
+    const ub=TU[ti*3+1]/w+0.5, vb=TV[ti*3+1]/h+0.5;
+    const uc=TU[ti*3+2]/w+0.5, vc=TV[ti*3+2]/h+0.5;
     if(ua>=0&&ua<=1&&va>=0&&va<=1&&ub>=0&&ub<=1&&vb>=0&&vb<=1&&uc>=0&&uc<=1&&vc>=0&&vc<=1){
       pousse(a,ua,va); pousse(b,ub,vb); pousse(c,uc,vc);
       continue;

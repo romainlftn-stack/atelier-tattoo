@@ -312,8 +312,9 @@ body.glisse-calque .layer{pointer-events:none}
 .config-item{display:flex;align-items:center;gap:8px;padding:6px 6px;border-radius:6px;font-size:12px}
 .config-item:hover{background:var(--pan2)}
 .config-item .nom{flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.config-item .sup{opacity:.5;cursor:pointer;font-size:13px;padding:2px 5px}
+.config-item .sup,.config-item .ren{opacity:.5;cursor:pointer;font-size:13px;padding:2px 5px}
 .config-item .sup:hover{opacity:1;color:var(--err)}
+.config-item .ren:hover{opacity:1;color:var(--acc)}
 .hbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(700px,92vw);
   max-height:84vh;overflow-y:auto;padding:24px 28px;box-shadow:0 24px 70px var(--shadow)}
 .hbox h2{font-size:16px;margin-bottom:4px;font-weight:600}
@@ -805,6 +806,25 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
         <div id="lightAdv" class="hid">
         <div class="sep"></div>
         <div id="lightList"></div>
+        <!-- Une nouvelle source arrivait toujours en spot, à un azimut tiré au
+             hasard : on la replaçait ensuite à la main. Autant la demander. -->
+        <div class="row wide"><label>Nouvelle source</label>
+          <select id="newLightType">
+            <option value="spot">Spot</option><option value="point">Ponctuelle</option><option value="dir">Directionnelle</option>
+          </select>
+        </div>
+        <div class="row wide"><label>Depuis</label>
+          <select id="newLightPos">
+            <option value="0,15">De face</option>
+            <option value="-35,25" selected>Trois quarts gauche</option>
+            <option value="35,25">Trois quarts droite</option>
+            <option value="-85,12">Côté gauche</option>
+            <option value="85,12">Côté droit</option>
+            <option value="180,18">À contre-jour</option>
+            <option value="0,72">Au-dessus</option>
+            <option value="0,-25">En contre-plongée</option>
+          </select>
+        </div>
         <div class="btnrow">
           <button class="btn" id="btnAddLight">+ Ajouter</button>
           <button class="btn dgr" id="btnDelLight">Retirer</button>
@@ -4386,28 +4406,46 @@ function decalSurPeau(bm, l, w, h, rot){
   /* Second garde-fou, local celui-là. Chaque sommet n'est mis à plat qu'une
      fois, par le premier chemin qui l'atteint ; quand le front de progression
      fait le tour du membre et se rejoint à l'arrière, les triangles de
-     raccord héritent de deux placements incompatibles et se retrouvent
-     écrasés — le motif s'y étirait. Un triangle correctement déplié garde
-     ses longueurs d'arête : on vérifie, et on s'arrête là où ce n'est plus
-     vrai plutôt que d'y étaler le dessin. */
+     raccord héritent de deux placements incompatibles : ils se retournent,
+     et le motif s'y étire. Le retournement est le signe sûr — on le lit sur
+     l'orientation du triangle mis à plat, comparée à celle du départ. Une
+     tolérance de longueur large l'accompagne, pour les triangles simplement
+     écrasés sans s'être retournés.
+     Un seuil serré sur les seules longueurs ne convenait pas : sur une peau
+     courbe, deux chemins de dépliage n'aboutissent jamais tout à fait au
+     même endroit — c'est la courbure elle-même — et des triangles isolés se
+     trouvaient rejetés un peu partout, laissant de petits trous dans le
+     dessin. */
+  const s0t=TA[seed*3], s1t=TA[seed*3+1], s2t=TA[seed*3+2];
+  const signeRef=Math.sign((U[s1t]-U[s0t])*(V[s2t]-V[s0t])-(U[s2t]-U[s0t])*(V[s1t]-V[s0t])) || 1;
   const memeLongueur=(i,j)=>{
     const du=Math.hypot(U[i]-U[j], V[i]-V[j]);
     const dx=PX[i]-PX[j], dy=PY[i]-PY[j], dz=PZ[i]-PZ[j];
     const d3=Math.sqrt(dx*dx+dy*dy+dz*dz);
-    return Math.abs(du-d3) <= d3*0.10 + 1e-5;
+    // 80 % : mesuré comme le meilleur compromis. À 10 %, trente-six poses sur
+    // cinquante-neuf perdaient un morceau du dessin ; à 80 %, plus aucune —
+    // hors la main, où le motif déborde réellement du corps — et la
+    // distorsion reste sous 1,13, invisible à l'œil.
+    return Math.abs(du-d3) <= d3*0.80 + 1e-5;
   };
   while(fq<fw){
     const ti=file[fq++];
     const t0=TA[ti*3], t1=TA[ti*3+1], t2=TA[ti*3+2];
     const u0=U[t0],u1=U[t1],u2=U[t2], v0=V[t0],v1=V[t1],v2=V[t2];
     if(u0!==u0 || u1!==u1 || u2!==u2) continue;
+    // Saut sur une surface voisine : on refuse et on n'avance plus par là.
     if(!coherent(t0)||!coherent(t1)||!coherent(t2)) continue;
-    if(!memeLongueur(t0,t1)||!memeLongueur(t1,t2)||!memeLongueur(t2,t0)) continue;
     // Hors du cadre : on ne le garde pas et on ne propage pas au-delà — le
     // cadre étant convexe, rien d'utile ne se trouve derrière.
     if((u0<-dw&&u1<-dw&&u2<-dw)||(u0>dw&&u1>dw&&u2>dw)) continue;
     if((v0<-dh&&v1<-dh&&v2<-dh)||(v0>dh&&v1>dh&&v2>dh)) continue;
-    garde[ng++]=ti;
+    /* Triangle mal déplié : on ne le dessine pas, mais on continue d'avancer
+       au travers. L'arrêter net coupait aussi tout ce qui se trouve derrière
+       lui, et c'est ainsi qu'un simple accident laissait un pan du motif
+       manquant. */
+    const retourne=Math.sign((u1-u0)*(v2-v0)-(u2-u0)*(v1-v0))!==signeRef;
+    const bon = !retourne && memeLongueur(t0,t1) && memeLongueur(t1,t2) && memeLongueur(t2,t0);
+    if(bon) garde[ng++]=ti;
     for(let k=0;k<3;k++){
       const a=TA[ti*3+k], b=TA[ti*3+(k+1)%3], opp=TA[ti*3+(k+2)%3];
       const lst=are.get(a<b?a*NB+b:b*NB+a);
@@ -4711,10 +4749,19 @@ function ligneCalque(l, i){
   d.className='layer'+(sel?' on':'')+(i===selLayer&&selIds.size>1?' principal':'')+(l.dossier?' dans-dossier':'');
   d.dataset.id=l.id;
   d.innerHTML=`<img class="th" src="${f?f.thumb:''}">
-    <span class="nm">${l.name}</span>
+    <span class="nm" title="Double-clic pour renommer">${l.name}</span>
     <span class="ic${l.flipH?'':' off'}" data-a="m" title="Miroir horizontal">⇄</span>
     <span class="ic${l.visible?'':' off'}" data-a="v" title="${l.visible?'Masquer':'Afficher'}">${l.visible?'👁':'✕'}</span>
-    <span class="ic${l.locked?'':' off'}" data-a="l" title="${l.locked?'Déverrouiller':'Verrouiller'}">${l.locked?'🔒':'🔓'}</span>`;
+    <span class="ic${l.locked?'':' off'}" data-a="l" title="${l.locked?'Déverrouiller':'Verrouiller'}">${l.locked?'🔒':'🔓'}</span>`
+    + (l.dossier ? `<span class="ic" data-a="s" title="Sortir de « ${l.dossier.replace(/"/g,'')} »">⇤</span>` : '');
+  d.addEventListener('dblclick',e=>{
+    if(!e.target.classList.contains('nm')) return;
+    e.stopPropagation();
+    ouvrirPrompt('Nom du calque', l.name, nom=>{
+      if(!nom) return 'Donnez un nom au calque.';
+      l.name=nom.slice(0,40); renderLayers(); updateLayerInfo(); pushHistory(); return null;
+    });
+  });
   d.addEventListener('click',e=>{
     // un glissé vient de se terminer : ce clic n'en est pas un
     if(glisseFaite){ glisseFaite=false; return; }
@@ -4722,6 +4769,7 @@ function ligneCalque(l, i){
     if(a==='v'){ l.visible=!l.visible; rebuildDecal(l); renderLayers(); return; }
     if(a==='l'){ l.locked=!l.locked; renderLayers(); return; }
     if(a==='m'){ l.flipH=!l.flipH; refreshLayerMaterial(l); renderLayers(); markDirty(); return; }
+    if(a==='s'){ rangerCalque(l, null, null); return; }
     selectLayer(i, (e.metaKey||e.ctrlKey) ? 'toggle' : (e.shiftKey ? 'range' : null));
   });
   return d;
@@ -5431,7 +5479,14 @@ function resnapLayers(){
       try{
         const a=ampleurLocale(l);
         if(a && l.ampleur){
-          const k=clamp(a/l.ampleur, 0.45, 2.6);
+          /* Rapport adouci plutôt que proportionnel : un tatouage ne grandit
+             pas comme la masse de celui qui le porte. Suivre le rapport brut
+             portait un motif de 12 cm à 32 cm sur Super, et un dessin si
+             large finit par faire le tour d'un membre — mesuré : à 12 cm son
+             corps est irréprochable, à 32 il se dégrade. L'exposant se
+             compense d'un aller-retour à l'autre : revenir sur Homme redonne
+             exactement la taille de départ. */
+          const k=clamp(Math.pow(a/l.ampleur, 0.65), 0.65, 1.8);
           if(Math.abs(k-1)>0.02){
             l.size=clamp(l.size*k, 1, 95);
             if(!l.depthLock) l.depth=clamp(l.size*1.25,4,40);
@@ -5657,7 +5712,10 @@ bind('lEl',  v=>editLight(L=>L.el=v), v=>Math.round(v)+'°');
 $('lShadow').addEventListener('change',e=>editLight(L=>L.shadow=e.target.checked));
 $('lKey').addEventListener('change',e=>editLight(L=>{ if(e.target.checked) lights.forEach(o=>o.key=false); L.key=e.target.checked; }));
 $('btnAddLight').addEventListener('click',()=>{
-  lights.push(makeLight({n:'Source '+(lights.length+1), t:'spot', i:80, k:5600, az:Math.round(Math.random()*300-150), el:25, a:45, p:0.8, d:300}));
+  const t=$('newLightType').value;
+  const [az,el]=$('newLightPos').value.split(',').map(Number);
+  const nom=$('newLightPos').selectedOptions[0].textContent;
+  lights.push(makeLight({n:nom, t, i:80, k:5600, az, el, a:45, p:0.8, d:300}));
   selLight=lights.length-1; renderLightList(); loadLightEditor(); updateGizmo();
 });
 $('btnDelLight').addEventListener('click',()=>{
@@ -5988,11 +6046,15 @@ function chargeUtileProjet(){
  *  Sans ce tri, ranger un calque dans un dossier y aurait fait entrer toute
  *  la séance en cours. */
 function chargeUtileConfig(nomDossier){
+  return chargeUtilePour(layers.filter(l=>l.dossier===nomDossier));
+}
+/** Charge utile réduite à un ensemble de calques donné. */
+function chargeUtilePour(choisis){
   const p=chargeUtileProjet();
-  const gr=layers.filter(l=>l.dossier===nomDossier);
-  const ids=new Set(gr.map(l=>l.flash));
-  p.layers=serializeLayers().filter(x=>x.dossier===nomDossier);
-  p.flashes=p.flashes.filter(f=>ids.has(f.id));
+  const ids=new Set(choisis.map(l=>l.id));
+  const flashs=new Set(choisis.map(l=>l.flash));
+  p.layers=serializeLayers().filter(x=>ids.has(x.id));
+  p.flashes=p.flashes.filter(f=>flashs.has(f.id));
   return p;
 }
 /** Réécrit la configuration d'un dossier avec les calques qu'il contient. */
@@ -6005,15 +6067,22 @@ async function enregistrerDossier(nom, id){
 $('btnEnregistrerConfig').addEventListener('click',()=>{
   if(!session){ ouvrirAuth('login'); toast('Connectez-vous pour enregistrer une configuration', true); return; }
   if(!layers.length){ toast('Aucun calque à enregistrer', true); return; }
-  ouvrirPrompt('Nom de la configuration', '', async (nom)=>{
+  /* On enregistre la sélection quand il y en a une, et tout sinon : prendre
+     d'office l'ensemble de la séance empêchait de composer une configuration
+     à partir de quelques calques. Cmd/Ctrl-clic pour en choisir plusieurs. */
+  const choisis = selIds.size ? layers.filter(l=>selIds.has(l.id)) : layers.slice();
+  const titre = selIds.size
+    ? 'Nom de la configuration ('+choisis.length+' calque'+(choisis.length>1?'s':'')+' sélectionné'+(choisis.length>1?'s':'')+')'
+    : 'Nom de la configuration (tous les calques)';
+  ouvrirPrompt(titre, '', async (nom)=>{
     if(!nom) return 'Donnez un nom à cette configuration.';
     const { data, error } = await sb.from('configurations').insert({
-      user_id: session.user.id, name: nom, data: chargeUtileProjet()
+      user_id: session.user.id, name: nom, data: chargeUtilePour(choisis)
     }).select('id').single();
     if(error) return error.message;
     // Les calques enregistrés rejoignent aussitôt le dossier de la
     // configuration : on peut y glisser la suite sans recharger.
-    layers.forEach(l=>{ if(!l.dossier){ l.dossier=nom; l.dossierId=data&&data.id||null; } });
+    choisis.forEach(l=>{ l.dossier=nom; l.dossierId=data&&data.id||null; });
     renderLayers();
     toast('Configuration « '+nom+' » enregistrée');
     await majDossierConfigs();
@@ -6038,12 +6107,27 @@ async function majDossierConfigs(){
   if(!_configsCache.length){ liste.innerHTML='<div class="hint" style="padding:6px">Aucune configuration enregistrée.</div>'; }
   _configsCache.forEach(c=>{
     const row=document.createElement('div'); row.className='config-item';
-    row.innerHTML='<span class="nom">'+c.name.replace(/</g,'&lt;')+'</span><span class="sup" title="Supprimer">✕</span>';
+    row.innerHTML='<span class="nom">'+c.name.replace(/</g,'&lt;')+'</span>'
+      +'<span class="ren" title="Renommer">✎</span><span class="sup" title="Supprimer">✕</span>';
     row.querySelector('.nom').addEventListener('click', async ()=>{
       const { data:full, error:err2 } = await sb.from('configurations').select('data').eq('id',c.id).single();
       if(err2){ toast('Chargement impossible', true); return; }
       await loadProject(full.data, c.name, c.id);
       toast('Configuration « '+c.name+' » chargée');
+    });
+    row.querySelector('.ren').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      ouvrirPrompt('Renommer la configuration', c.name, async (nom)=>{
+        if(!nom) return 'Donnez un nom à cette configuration.';
+        const { error } = await sb.from('configurations').update({name:nom}).eq('id', c.id);
+        if(error) return error.message;
+        // Le dossier ouvert dans les calques porte l'ancien nom : il suit.
+        layers.forEach(l=>{ if(l.dossierId===c.id) l.dossier=nom; });
+        renderLayers();
+        await majDossierConfigs();
+        toast('Renommée en « '+nom+' »');
+        return null;
+      });
     });
     row.querySelector('.sup').addEventListener('click', async (e)=>{
       e.stopPropagation();
@@ -6335,7 +6419,6 @@ async function _chargerCorpsInterne(cle){
   racine.traverse(o=>{ poseRepos.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
   // Les clips sont réancrés sur la pose de repos, relevée avant toute animation.
   g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative, racine));
-  distAvantAnim=null;
   mixer = g.animations.length ? new THREE.AnimationMixer(racine) : null;
   window.__clips = g.animations;
   clipCourant=null;
@@ -6406,10 +6489,6 @@ function figerRacineClip(clip, hauteurNative, racine){
 function majBoutonsAnim(nom){
   $$('#animBar button').forEach(b=>b.classList.toggle('on', b.dataset.a===nom));
 }
-/* Distance caméra d'avant l'animation. Le recul de cadrage ne doit être pris
-   qu'une fois : appliqué à chaque clic, il se multipliait d'une animation à
-   l'autre (1,3 puis 1,69 puis 2,2…) et le corps rapetissait sans fin. */
-let distAvantAnim=null;
 function jouerAnim(nom){
   if(!mixer) return;
   if(nom==='__stop'){
@@ -6418,14 +6497,6 @@ function jouerAnim(nom){
     if(squelette) squelette.pose();
     peauxSkinned.forEach(sm=>sm.updateMatrixWorld(true));
     majBoutonsAnim('__stop');
-    // On rend exactement le cadrage d'avant l'animation : un fitView()
-    // effacerait le zoom que l'on venait de faire sur un avant-bras.
-    if(distAvantAnim!=null){
-      const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-      camera.position.copy(controls.target).addScaledVector(dir, distAvantAnim);
-      controls.update();
-      distAvantAnim=null;
-    }
     markDirty(); return;
   }
   const cl=(window.__clips||[]).find(c=>c.name===nom);
@@ -6433,15 +6504,10 @@ function jouerAnim(nom){
   mixer.stopAllAction();
   mixer.clipAction(cl).reset().play();
   clipCourant=cl; majBoutonsAnim(nom);
-  // Un mouvement ample (danse, combat) étend le corps jusqu'à une fois et
-  // demie sa boîte au repos : on recule une fois pour qu'il reste entier dans
-  // le cadre. Passer d'une animation à l'autre ne recule plus.
-  if(modelKind==='corps3d' && distAvantAnim==null){
-    distAvantAnim=camera.position.distanceTo(controls.target);
-    const dir=new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-    camera.position.copy(controls.target).addScaledVector(dir, distAvantAnim*1.3);
-    controls.update(); markDirty();
-  }
+  /* Aucun recul de cadrage : il faisait passer le corps de 89 % à 67 % de la
+     hauteur de l'écran dès la première animation, ce qui se lit comme un
+     rapetissement. Un membre qui sort brièvement du cadre pendant une danse
+     gêne moins que ce recul à chaque fois. */
 }
 $$('#animBar button').forEach(b=>b.addEventListener('click',()=>jouerAnim(b.dataset.a)));
 let dernierCorps3D='male';

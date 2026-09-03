@@ -2148,12 +2148,7 @@ const tetonsCorps = {
  *  vers l'arête du nez et les aréoles décalées d'autant. On leur applique donc
  *  la même rotation, autour de l'axe vertical passant par l'origine — le corps
  *  y est recentré en X et en Z, la rotation est donc la même pour tous. */
-function repereCorps(x, y, z){
-  const v=new THREE.Vector3(x,y,z);
-  const yf=(CORPS[corpsActif]||{}).yawFix;
-  if(yf) v.applyAxisAngle(new THREE.Vector3(0,1,0), THREE.MathUtils.degToRad(yf));
-  return v;
-}
+function repereCorps(x, y, z){ return new THREE.Vector3(x,y,z); }
 function majTetons(cle, H){
   const t=(CORPS[cle]||{}).tetons;
   if(!t || !H || !peauxSkinned.length){ tetonsCorps.uTetR.value=0; return; }
@@ -3419,8 +3414,18 @@ function setView(v){
   if(v==='fit'){ fitView(); return; }
   if(v==='focus'){ focusSelected(); return; }
   const dd=dirs[v]||dirs.front;
+  const dir=new THREE.Vector3(dd[0],dd[1],dd[2]);
+  /* Le fichier de Homme porte une torsion de sa pose de repos : hanches,
+     genoux, chevilles, coudes et mains tournent tous d'environ 11,5° par
+     rapport à l'axe X, là où Femme et Super mesurent ~0°. La touche F visait
+     donc de biais. On redresse la CAMÉRA, pas le modèle : tourner le corps
+     déplaçait du même coup tous les repères relevés en dur sur lui — les
+     globes oculaires et les aréoles, calés une fois pour toutes sur ses
+     coordonnées d'origine. */
+  const yf=(CORPS[corpsActif]||{}).yawFix;
+  if(yf && modelKind==='corps3d') dir.applyAxisAngle(new THREE.Vector3(0,1,0), THREE.MathUtils.degToRad(-yf));
   controls.target.copy(c);
-  camera.position.set(c.x+dd[0]*d, c.y+dd[1]*d, c.z+dd[2]*d);
+  camera.position.copy(c).addScaledVector(dir, d);
   controls.update();
 }
 
@@ -4243,13 +4248,32 @@ function decalEnroule(bm, l, w, h, rot){
                     while(th-ref<-Math.PI) th+=2*Math.PI; }
     const arc=th*rho;
     const x2= arc*cr + z*sr, y2= -arc*sr + z*cr;
-    return {p:vw.clone(), n:nw.clone(), u:x2/w+0.5, v:y2/h+0.5, th};
+    const rx=dd.x-A.x*z, ry=dd.y-A.y*z, rz=dd.z-A.z*z;
+    const rad=Math.hypot(rx,ry,rz);                              // distance à l'axe
+    // la peau du membre regarde vers l'extérieur de son axe ; celle du torse
+    // qu'il touche regarde vers lui
+    const dehors = rad>1e-9 ? (nw.x*rx+nw.y*ry+nw.z*rz)/rad : 0;
+    return {p:vw.clone(), n:nw.clone(), u:x2/w+0.5, v:y2/h+0.5, th, rad, dehors};
   }
   const sP=[], sN=[], sU=[];
   for(let q=0;q<nProche;q++){
     const t=_pxBuf[q];
     const i0=IA?IA[t*3]:t*3, i1=IA?IA[t*3+1]:t*3+1, i2=IA?IA[t*3+2]:t*3+2;
     const a=coord(i0,null), b=coord(i1,a.th), c=coord(i2,a.th);
+    /* Rester sur le membre. La sphère de voisinage ne sait pas distinguer
+       l'avant-bras du ventre contre lequel il pend : sur Super, dont les bras
+       tombent le long d'un torse énorme, le bracelet se repeignait en travers
+       de la hanche. On n'accepte donc que la peau qui se tient réellement à la
+       distance du membre — le tour mesuré, avec la marge d'un membre qui n'est
+       pas un cylindre parfait. Tout ce qui est nettement plus loin de l'axe
+       appartient à autre chose. */
+    const rm=(a.rad+b.rad+c.rad)/3;
+    if(rm < rho*0.45 || rm > rho*1.75) continue;
+    /* Et surtout : la peau d'un membre tourne le dos à son axe, celle du
+       torse contre lequel il pend lui fait face. Le seul critère de distance
+       ne suffisait pas — le flanc de Super tombe à une distance parfaitement
+       plausible du cubitus. L'orientation, elle, ne trompe pas. */
+    if((a.dehors+b.dehors+c.dehors)/3 < 0.15) continue;
     if((a.u<0&&b.u<0&&c.u<0)||(a.u>1&&b.u>1&&c.u>1)) continue;
     if((a.v<0&&b.v<0&&c.v<0)||(a.v>1&&b.v>1&&c.v>1)) continue;
     let poly=[a,b,c];
@@ -6300,6 +6324,11 @@ $('projInput').addEventListener('change',e=>{
   r.readAsText(f); e.target.value='';
 });
 async function loadProject(d, dossier, dossierId){
+  /* Appliquer une configuration ne doit rien changer au point de vue : le
+     corps se recharge (et se recadre), puis la vue enregistrée avec le projet
+     venait par-dessus — le modèle semblait rapetisser d'un cran à chaque
+     application. On mémorise donc la caméra pour la remettre telle quelle. */
+  const vueGardee = dossier ? {cam:camera.position.clone(), tgt:controls.target.clone()} : null;
   layers.slice().forEach(l=>deleteLayer(l,true)); layers=[];
   flashes=[]; selFlash=-1;
   for(const k in (d.model||{})){ const e=$(k); if(e){ e.value=d.model[k]; e.__upd&&e.__upd(); } }
@@ -6326,7 +6355,8 @@ async function loadProject(d, dossier, dossierId){
     $('gBg').value=d.view.bg; setBg(d.view.bg);
     $('gExp').value=d.view.exp; renderer.toneMappingExposure=d.view.exp/100;
     $('gEnvInt').value=d.view.env; scene.environmentIntensity=d.view.env/100;
-    camera.position.fromArray(d.view.cam); controls.target.fromArray(d.view.tgt); controls.update(); }
+    if(!vueGardee){ camera.position.fromArray(d.view.cam); controls.target.fromArray(d.view.tgt); controls.update(); } }
+  if(vueGardee){ camera.position.copy(vueGardee.cam); controls.target.copy(vueGardee.tgt); controls.update(); }
   if(d.lights){
     lights.forEach(L=>{ lightGroup.remove(L.obj); if(L.target) lightGroup.remove(L.target); if(L.helper) helperG.remove(L.helper); });
     lights=d.lights.map(makeLight); selLight=0; renderLightList(); loadLightEditor();
@@ -6386,7 +6416,7 @@ const CORPS = {
              fausse. Position relevée une fois sur le modèle, exprimée en
              fractions de la stature et rapportée à l'os de la tête, donc
              indépendante du réglage de taille. */
-          yeux:{ r:0.0095, g:[-0.0200,0.0494,0.0731], d:[0.0200,0.0494,0.0731] },
+          yeux:{ r:0.0135, g:[-0.0200,0.0494,0.0731], d:[0.0200,0.0494,0.0731] },
           tetons:{ x:0.0720, y:0.6980, z:0.1650, r:0.0210 } },
   // Female arrive en quatre maillages (tête, tronc, bras, jambes) portant
   // chacun sa propre texture : on les reconnaît à leur nombre de sommets.
@@ -6485,7 +6515,6 @@ async function _chargerCorpsInterne(cle){
   peauxSkinned=[]; bindProxies=[]; squelette=null;
 
   const racine=g.scene;
-  if(def.yawFix) racine.rotation.y += THREE.MathUtils.degToRad(def.yawFix);
   // Un seul matériau propre, partagé : pas de texture à télécharger, donc
   // pas d'attente réseau ni de premier rendu noir à rattraper.
   racine.traverse(o=>{

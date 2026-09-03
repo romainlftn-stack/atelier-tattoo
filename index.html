@@ -6304,7 +6304,14 @@ const CORPS = {
   male: { nom:'Homme', fichier:'corps/male_anime.glb?v='+ASSET_V,
           tex:{ map:'corps/tex/male_d.jpg?v='+ASSET_V },
           yeux:{ r:0.00742, g:[-0.01371,0.06084,0.05782], d:[0.02444,0.06084,0.04983] },
-          tetons:{ x:0.0421, y:0.7337, z:0.0400, r:0.0124 } },
+          tetons:{ x:0.0421, y:0.7337, z:0.0400, r:0.0124 },
+          /* Le fichier source porte une légère torsion de la pose de repos —
+             mesurée sur les articulations, pas sur la caméra : hanches,
+             genoux, chevilles, coudes, mains tournent tous d'environ 11,5°
+             par rapport à l'axe X (Femme et Super mesurent ~0°). La vue de
+             face (touche F) partait donc en angle. Correction rigide de tout
+             le modèle au chargement, avant toute mesure de boîte englobante. */
+          yawFix:-11.5 },
           /* Ni normalMap ni roughnessMap : sans tangentes explicites sur un maillage
              issu de Mixamo (enroulement localement inconsistant), le normal
              mapping produit des normales aberrantes qui annulent l'éclairage
@@ -6417,6 +6424,7 @@ async function _chargerCorpsInterne(cle){
   peauxSkinned=[]; bindProxies=[]; squelette=null;
 
   const racine=g.scene;
+  if(def.yawFix) racine.rotation.y += THREE.MathUtils.degToRad(def.yawFix);
   // Un seul matériau propre, partagé : pas de texture à télécharger, donc
   // pas d'attente réseau ni de premier rendu noir à rattraper.
   racine.traverse(o=>{

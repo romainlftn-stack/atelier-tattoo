@@ -286,6 +286,19 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 #menuCompte button{display:block;width:100%;text-align:left;background:none;border:none;
   color:var(--txt);font:inherit;font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer}
 #menuCompte button:hover{background:var(--pan2)}
+/* Dossier de calques : un groupe repliable par configuration chargée. */
+.dossier-calques{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+  padding:6px 8px;margin-top:4px;border-radius:7px;background:var(--elev1);
+  border:1px solid var(--line);font-size:11.5px;font-weight:600;color:var(--txt2)}
+.dossier-calques:hover{background:var(--elev2)}
+.dossier-calques .chev{font-size:9px;color:var(--txt3);transition:transform .15s}
+.dossier-calques.ouvert .chev{transform:rotate(90deg)}
+.dossier-calques .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dossier-calques .cnt{background:var(--sunk);border-radius:9px;padding:1px 7px;font-size:10.5px;color:var(--txt3)}
+.dossier-calques .ic{opacity:.75;font-size:12px}
+.dossier-calques .ic:hover{opacity:1}
+.dossier-corps{border-left:2px solid var(--line);margin-left:8px;padding-left:6px}
+.layer.dans-dossier{margin-left:0}
 #dossierConfigs{margin-top:8px}
 #configsToggle{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txt2);
   cursor:pointer;padding:6px 2px;user-select:none}
@@ -2970,6 +2983,12 @@ function buildHand(P, armNodesArr, side){
   });
 }
 function buildModel(){
+  /* Les corps entiers ne se construisent pas ici : ils viennent de leur
+     propre fichier. Un curseur de morphologie programme pourtant un rebuild
+     différé, et celui-ci effaçait le corps fraîchement chargé au profit des
+     modèles de secours — c'est ce qui se produisait au chargement d'une
+     configuration, où seize curseurs sont appliqués d'affilée. */
+  if(modelKind==='corps3d') return;
   const P = morph(), H = P.H;
   clearModel();
   anatXform.identity(); anatXformInv.identity();
@@ -4627,29 +4646,63 @@ function mirrorLayer(l){
   selLayer=layers.length-1; renderLayers(); loadLayerEditor(); pushHistory();
   toast('Calque symétrisé');
 }
+/* Dossiers repliés : un par configuration chargée. On retient l'état par nom
+   pour qu'un redessin de la liste ne rouvre pas ce que l'on venait de fermer. */
+const dossiersReplies=new Set();
+function ligneCalque(l, i){
+  const f=flashes.find(x=>x.id===l.flash);
+  const d=document.createElement('div');
+  const sel = selIds.size ? selIds.has(l.id) : (i===selLayer);
+  d.className='layer'+(sel?' on':'')+(i===selLayer&&selIds.size>1?' principal':'')+(l.dossier?' dans-dossier':'');
+  d.innerHTML=`<img class="th" src="${f?f.thumb:''}">
+    <span class="nm">${l.name}</span>
+    <span class="ic${l.flipH?'':' off'}" data-a="m" title="Miroir horizontal">⇄</span>
+    <span class="ic${l.visible?'':' off'}" data-a="v" title="${l.visible?'Masquer':'Afficher'}">${l.visible?'👁':'✕'}</span>
+    <span class="ic${l.locked?'':' off'}" data-a="l" title="${l.locked?'Déverrouiller':'Verrouiller'}">${l.locked?'🔒':'🔓'}</span>`;
+  d.addEventListener('click',e=>{
+    const a=e.target.dataset.a;
+    if(a==='v'){ l.visible=!l.visible; rebuildDecal(l); renderLayers(); return; }
+    if(a==='l'){ l.locked=!l.locked; renderLayers(); return; }
+    if(a==='m'){ l.flipH=!l.flipH; refreshLayerMaterial(l); renderLayers(); markDirty(); return; }
+    selectLayer(i, (e.metaKey||e.ctrlKey) ? 'toggle' : (e.shiftKey ? 'range' : null));
+  });
+  return d;
+}
 function renderLayers(){
   const box=$('layerList');
   $('cntLayers').textContent=layers.length;
   if(!layers.length){ box.innerHTML='<div class="empty">Aucun tatouage posé.<br>Choisir un motif puis cliquer sur le corps.</div>'; return; }
   box.innerHTML='';
+  let dossierCourant=null, corps=null;
   layers.forEach((l,i)=>{
-    const f=flashes.find(x=>x.id===l.flash);
-    const d=document.createElement('div');
-    const sel = selIds.size ? selIds.has(l.id) : (i===selLayer);
-    d.className='layer'+(sel?' on':'')+(i===selLayer&&selIds.size>1?' principal':'');
-    d.innerHTML=`<img class="th" src="${f?f.thumb:''}">
-      <span class="nm">${l.name}</span>
-      <span class="ic${l.flipH?'':' off'}" data-a="m" title="Miroir horizontal">⇄</span>
-      <span class="ic${l.visible?'':' off'}" data-a="v" title="${l.visible?'Masquer':'Afficher'}">${l.visible?'👁':'✕'}</span>
-      <span class="ic${l.locked?'':' off'}" data-a="l" title="${l.locked?'Déverrouiller':'Verrouiller'}">${l.locked?'🔒':'🔓'}</span>`;
-    d.addEventListener('click',e=>{
-      const a=e.target.dataset.a;
-      if(a==='v'){ l.visible=!l.visible; rebuildDecal(l); renderLayers(); return; }
-      if(a==='l'){ l.locked=!l.locked; renderLayers(); return; }
-      if(a==='m'){ l.flipH=!l.flipH; refreshLayerMaterial(l); renderLayers(); markDirty(); return; }
-      selectLayer(i, (e.metaKey||e.ctrlKey) ? 'toggle' : (e.shiftKey ? 'range' : null));
-    });
-    box.appendChild(d);
+    const dos=l.dossier||null;
+    if(dos!==dossierCourant){
+      dossierCourant=dos; corps=null;
+      if(dos){
+        const n=layers.filter(x=>x.dossier===dos).length;
+        const replie=dossiersReplies.has(dos);
+        const tete=document.createElement('div');
+        tete.className='dossier-calques'+(replie?'':' ouvert');
+        tete.innerHTML='<span class="chev">▶</span><span class="nm">'+dos.replace(/</g,'&lt;')+'</span><span class="cnt">'+n+'</span>'+
+                       '<span class="ic" data-a="v" title="Afficher ou masquer tout le dossier">👁</span>';
+        tete.addEventListener('click',e=>{
+          if(e.target.dataset.a==='v'){
+            const gr=layers.filter(x=>x.dossier===dos);
+            const tout=gr.every(x=>x.visible);
+            gr.forEach(x=>{ x.visible=!tout; rebuildDecal(x); });
+            renderLayers(); return;
+          }
+          if(dossiersReplies.has(dos)) dossiersReplies.delete(dos); else dossiersReplies.add(dos);
+          renderLayers();
+        });
+        box.appendChild(tete);
+        corps=document.createElement('div');
+        corps.className='dossier-corps';
+        if(replie) corps.style.display='none';
+        box.appendChild(corps);
+      }
+    }
+    (corps||box).appendChild(ligneCalque(l,i));
   });
 }
 /* Sélection multiple : selLayer reste le calque « principal » (celui dont le
@@ -4771,9 +4824,9 @@ function serializeLayers(){
     nm:l.norm?l.norm.toArray():null, anc:l.anc||null,
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked,
-    visible:l.visible, wrap:l.wrap||0, wrapManuel:l.wrapManuel||0}));
+    visible:l.visible, wrap:l.wrap||0, wrapManuel:l.wrapManuel||0, dossier:l.dossier||null}));
 }
-function restoreLayers(arr){
+function restoreLayers(arr, dossier){
   histLock=true;
   layers.slice().forEach(l=>deleteLayer(l,true));
   layers=[];
@@ -4785,6 +4838,7 @@ function restoreLayers(arr){
       norm:s.nm?new THREE.Vector3().fromArray(s.nm):null, anc:s.anc||null,
       meshes:[], tex:null, bump:null, mat:null, mesh:null});
     delete l.p; delete l.n; delete l.cp; delete l.cn; delete l.rg; delete l.nm;
+    if(dossier) l.dossier=dossier;
     layers.push(l); refreshLayerMaterial(l);
   });
   selLayer=Math.min(selLayer, layers.length-1);
@@ -5859,7 +5913,7 @@ async function majDossierConfigs(){
     row.querySelector('.nom').addEventListener('click', async ()=>{
       const { data:full, error:err2 } = await sb.from('configurations').select('data').eq('id',c.id).single();
       if(err2){ toast('Chargement impossible', true); return; }
-      loadProject(full.data);
+      await loadProject(full.data, c.name);
       toast('Configuration « '+c.name+' » chargée');
     });
     row.querySelector('.sup').addEventListener('click', async (e)=>{
@@ -5913,15 +5967,28 @@ $('projInput').addEventListener('change',e=>{
   };
   r.readAsText(f); e.target.value='';
 });
-function loadProject(d){
+async function loadProject(d, dossier){
   layers.slice().forEach(l=>deleteLayer(l,true)); layers=[];
   flashes=[]; selFlash=-1;
   for(const k in (d.model||{})){ const e=$(k); if(e){ e.value=d.model[k]; e.__upd&&e.__upd(); } }
   if(d.theme) applyTheme(d.theme);
   if(d.tone!=null){ skinToneIdx=d.tone; $$('#skinSw .sw').forEach((s,i)=>s.classList.toggle('on',i===skinToneIdx)); }
   modelKind=d.kind||'male';
-  $$('#modelTabs button').forEach(b=>b.classList.toggle('on', b.dataset.m===modelKind));
-  refreshSkinMaps(); refreshSkinLook(); buildModel();
+  /* Une configuration posée sur un corps entier vaut kind « corps3d », que
+     buildModel ne sait pas construire : on retombait sur les modèles de
+     secours, et restoreLayers cherchait ensuite chaque calque sur une peau
+     qui n'était pas la sienne — d'où le figement. Ces corps se chargent par
+     leur propre fonction, et il faut l'attendre. */
+  if(modelKind==='corps3d' && d.corps && CORPS[d.corps]){
+    $$('#modelTabs button').forEach(b=>b.classList.toggle('on', b.dataset.m==='corps'));
+    $$('#corpsSubTabs button').forEach(b=>b.classList.toggle('on', b.dataset.c===d.corps));
+    $('corpsSubTabs').style.display='';
+    refreshSkinMaps(); refreshSkinLook();
+    await chargerCorps(d.corps);
+  }else{
+    $$('#modelTabs button').forEach(b=>b.classList.toggle('on', b.dataset.m===modelKind));
+    refreshSkinMaps(); refreshSkinLook(); buildModel();
+  }
   pivot.copy(modelBox.getCenter(new THREE.Vector3()));
   if(d.view){ $('vFov').value=d.view.fov; camera.fov=d.view.fov; camera.updateProjectionMatrix();
     $('gBg').value=d.view.bg; setBg(d.view.bg);
@@ -5933,7 +6000,7 @@ function loadProject(d){
     lights=d.lights.map(makeLight); selLight=0; renderLightList(); loadLightEditor();
   }
   let pending=(d.flashes||[]).length;
-  if(!pending){ restoreLayers(d.layers||[]); toast('Projet chargé'); return; }
+  if(!pending){ restoreLayers(d.layers||[], dossier); toast('Projet chargé'); return; }
   (d.flashes||[]).forEach(fs=>{
     const im=new Image();
     im.onload=()=>{
@@ -5941,7 +6008,7 @@ function loadProject(d){
       const f={id:fs.id, name:fs.name, src, info:fs.info||analyzeSource(src), cut:fs.cut, cutCanvas:null};
       cutout(f); f.thumb=f.cutCanvas.toDataURL('image/png'); flashes.push(f);
       if(--pending===0){ selFlash=0; renderGallery(); loadCutEditor(); drawCutPreview();
-        restoreLayers(d.layers||[]); hist=[]; histAt=-1; pushHistory(); toast('Projet chargé'); }
+        restoreLayers(d.layers||[], dossier); hist=[]; histAt=-1; pushHistory(); toast('Projet chargé'); }
     };
     im.src=fs.src;
   });
@@ -6043,6 +6110,8 @@ async function chargerCorps(cle){
   // est en train de construire, et plus rien n'aboutit jamais. On protège
   // donc l'entrée de la fonction contre tout appel pendant qu'un autre tourne.
   if(_chargementCorpsEnCours) return;
+  // Un rebuild du corps procédural encore en attente n'a plus lieu d'être.
+  clearTimeout(rebuildTimer);
   _chargementCorpsEnCours=true;
   try{ await _chargerCorpsInterne(cle); }
   finally{ _chargementCorpsEnCours=false; }

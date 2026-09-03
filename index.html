@@ -6437,6 +6437,7 @@ async function _chargerCorpsInterne(cle){
   $('btnVol').hidden = !clVol;
   // Les clips sont réancrés sur la pose de repos, relevée avant toute animation.
   g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative, racine));
+  if(clVol) clVol.chute = caleVertical(clVol, racine, poseRepos);
   mixer = g.animations.length ? new THREE.AnimationMixer(racine) : null;
   window.__clips = g.animations;
   clipCourant=null;
@@ -6483,29 +6484,59 @@ async function chargerVol(){
 const osCanonique = n => n.replace(/^mixamorig\d*:?/i,'').replace(/_\d+$/,'').toLowerCase();
 function clipVol(brut, g, racine){
   if(!brut) return null;
-  /* Femme est livrée en plusieurs maillages, chacun avec sa copie du
+  /* Femme est livrée en plusieurs maillages ayant chacun sa copie du
      squelette : trois.js dédoublonne les noms en « mixamorigHips »,
-     « mixamorigHips_1 », « mixamorigHips_2 »… Ne piloter qu'un jumeau par os
-     déchirait le corps — épaules et hanches restaient en arrière pendant que
-     le reste bougeait. On pilote donc TOUS les noeuds qui portent le même os :
-     les copies inutilisées ne coûtent qu'une piste, et plus rien ne se
-     désolidarise quel que soit le squelette auquel la peau est attachée. */
-  const cibles=new Map();
-  const noter=n=>{ const k=osCanonique(n); (cibles.get(k) || cibles.set(k,new Set()).get(k)).add(n); };
-  g.animations.forEach(c=>c.tracks.forEach(t=>noter(t.name.split('.')[0])));
-  racine.traverse(o=>{ if(o.isBone) noter(o.name); });
+     « mixamorigHips_1 », « mixamorigHips_2 »… Les jumeaux ne sont pas des
+     frères indépendants, ils s'emboîtent : piloter les deux appliquait la
+     rotation deux fois et froissait le ventre et les épaules. On reprend
+     donc exactement les noeuds que les clips d'origine du modèle pilotent —
+     ce jeu-là est vérifié par la marche, la course, le combat et la danse.
+     Pour un os qu'aucun clip ne touche, on ne se rabat sur le squelette que
+     s'il n'y a aucune ambiguïté, c'est-à-dire un seul noeud de ce nom. */
+  const cible=new Map(), compte=new Map();
+  g.animations.forEach(c=>c.tracks.forEach(t=>{
+    const n=t.name.split('.')[0], k=osCanonique(n);
+    if(!cible.has(k)) cible.set(k, n);
+  }));
+  racine.traverse(o=>{ if(o.isBone){ const k=osCanonique(o.name); compte.set(k,(compte.get(k)||0)+1); } });
+  racine.traverse(o=>{ const k=o.isBone?osCanonique(o.name):null;
+    if(k && !cible.has(k) && compte.get(k)===1) cible.set(k, o.name); });
   const temps=new Float32Array(brut.images);
   for(let i=0;i<brut.images;i++) temps[i]=i/brut.fps;
   const pistes=[];
   for(const os in brut.pistes){
-    const noms=cibles.get(osCanonique(os)); if(!noms) continue;
+    const nom=cible.get(osCanonique(os)); if(!nom) continue;
     const p=brut.pistes[os];
-    noms.forEach(nom=>{
-      if(p.quaternion) pistes.push(new THREE.QuaternionKeyframeTrack(nom+'.quaternion', temps, p.quaternion));
-      if(p.position)   pistes.push(new THREE.VectorKeyframeTrack(nom+'.position', temps, p.position));
-    });
+    if(p.quaternion) pistes.push(new THREE.QuaternionKeyframeTrack(nom+'.quaternion', temps, p.quaternion));
+    if(p.position)   pistes.push(new THREE.VectorKeyframeTrack(nom+'.position', temps, p.position));
   }
   return pistes.length ? new THREE.AnimationClip('vol', brut.duree, pistes) : null;
+}
+
+/** Ramène un clip flottant à la hauteur de la pose debout.
+ *  « Treading Water » a été calculé pour un corps qui barbote : genoux pliés,
+ *  pieds pendants. Réancré sur le bassin de la pose de repos, le personnage se
+ *  retrouve donc perché — la tête sortait du cadre, que fitView() avait réglé
+ *  sur la pose debout. On mesure ici de combien le pied le plus bas remonte
+ *  pendant le clip, et on redescend le corps d'autant. La mesure se fait sur
+ *  les os, pas sur la peau : c'est immédiat et ça marche quelle que soit
+ *  l'échelle du squelette (celui de Super est à 0,008). */
+function caleVertical(clip, racine, poseRepos){
+  const pieds=[];
+  racine.traverse(o=>{ if(o.isBone && /(foot|toebase)(_\d+)?$/i.test(o.name)) pieds.push(o); });
+  if(!pieds.length) return 0;
+  const v=new THREE.Vector3();
+  const basPied=()=>{ racine.updateMatrixWorld(true);
+    let y=Infinity; pieds.forEach(b=>{ y=Math.min(y, b.getWorldPosition(v).y); }); return y; };
+  const repos=basPied();
+  const mx=new THREE.AnimationMixer(racine);
+  mx.clipAction(clip).play();
+  let mini=Infinity;
+  for(let i=0;i<=20;i++){ mx.setTime(clip.duration*i/20); mini=Math.min(mini, basPied()); }
+  mx.stopAllAction(); mx.uncacheRoot(racine);
+  poseRepos.forEach(([o,p,q,e])=>{ o.position.copy(p); o.quaternion.copy(q); o.scale.copy(e); });
+  racine.updateMatrixWorld(true);
+  return Math.max(0, mini-repos);
 }
 
 /** Neutralise le déplacement d'ensemble d'un clip Mixamo.
@@ -6569,7 +6600,16 @@ function jouerAnim(nom){
   const cl=(window.__clips||[]).find(c=>c.name===nom);
   if(!cl){ toast('Animation « '+nom+' » absente', true); return; }
   mixer.stopAllAction();
-  mixer.clipAction(cl).reset().play();
+  // Certains clips (Vol en particulier) ne démarrent pas en pose neutre :
+  // les épaules y sont déjà loin de la pose de repos dès la première image.
+  // Sans fondu, le corps « claque » d'un coup à l'endroit le plus mobile —
+  // typiquement l'attache cou/épaule. Un court fondu d'entrée absorbe ce saut.
+  mixer.clipAction(cl).reset().fadeIn(0.25).play();
+  // Un clip flottant est redescendu en bloc : on déplace la racine, jamais le
+  // bassin, pour que la pose reste intacte. Pause remet tout en place, la
+  // racine étant elle aussi dans poseRepos.
+  const rac=poseRepos.length?poseRepos[0]:null;
+  if(rac) rac[0].position.y = rac[1].y - (cl.chute||0);
   clipCourant=cl; majBoutonsAnim(nom);
   /* Aucun recul de cadrage : il faisait passer le corps de 89 % à 67 % de la
      hauteur de l'écran dès la première animation, ce qui se lit comme un

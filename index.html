@@ -4657,7 +4657,7 @@ function addLayer(flashId, pos, normal, mesh){
   l.norm = versNorm(l.canon, familleModele());
   l.anc  = ancrerSurSquelette(pos, normal);
   l.region = regionOf(depuisNorm(l.norm,'anat'));
-  try{ l.ampleur=ampleurLocale(l); }catch(e){}
+  try{ const A=ampleurLocale(l); if(A){ l.ampleur=A.v; l.ampleurM=A.m; } }catch(e){}
   l.sizeLin = l.size;
   majEnroulementAuto(l);
   layers.push(l);
@@ -4935,10 +4935,20 @@ function epaisseurLocale(pos){
   return n ? l/n*100 : null;                 // en centimètres
 }
 /** Ampleur du corps à l'endroit du calque, en centimètres. */
+/* Deux mesures très différentes cohabitaient sous le même nom : le tour du
+   membre sur un bras ou une jambe, l'épaisseur du corps ailleurs. Reporter un
+   motif d'un corps à l'autre comparait parfois l'une à l'autre — un tour de
+   cuisse relevé sur Homme contre une épaisseur de bassin sur Super, dont
+   axeMembre refuse le fémur trop noyé dans la chair. Le rapport n'avait alors
+   aucun sens et le motif changeait de taille au hasard : mesuré, 12 cm sur
+   Homme devenaient 8,2 cm sur Super, plus petits sur un corps deux fois plus
+   massif. On rend donc la mesure avec sa nature, et on ne transpose que si les
+   deux bouts parlent de la même chose. */
 function ampleurLocale(l){
   const tour=circonferenceMembre(l);
-  if(tour) return tour;
-  return epaisseurLocale(l.pos);
+  if(tour) return {v:tour, m:'tour'};
+  const ep=epaisseurLocale(l.pos);
+  return ep ? {v:ep, m:'ep'} : null;
 }
 /** Circonférence du membre sous le calque, en centimètres. */
 function circonferenceMembre(l){
@@ -4970,7 +4980,7 @@ function serializeLayers(){
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked,
     visible:l.visible, wrap:l.wrap||0, ampleur:l.ampleur||null,
-    sizeLin:l.sizeLin!=null?l.sizeLin:l.size,
+    sizeLin:l.sizeLin!=null?l.sizeLin:l.size, ampleurM:l.ampleurM||null,
     dossier:l.dossier||null, dossierId:l.dossierId||null}));
 }
 function restoreLayers(arr, dossier, dossierId){
@@ -4987,6 +4997,15 @@ function restoreLayers(arr, dossier, dossierId){
     delete l.p; delete l.n; delete l.cp; delete l.cn; delete l.rg; delete l.nm;
     if(dossier){ l.dossier=dossier; l.dossierId=dossierId||null; }
     layers.push(l); refreshLayerMaterial(l);
+  });
+  /* Conversion des ancrages d'avant la correction du repère : ils sont ici
+     posés sur le corps qui les a vus naître, à leur position d'origine. On
+     les ré-ancre donc dans le nouveau repère sans rien déplacer — c'est le
+     seul instant où l'on sait que la position est la bonne. Sans cela, ces
+     calques continueraient de tourner autour du membre à chaque report. */
+  layers.forEach(l=>{
+    if(!l.anc || l.anc.f) return;
+    try{ const a=ancrerSurSquelette(l.pos, l.normal); if(a) l.anc=a; }catch(e){}
   });
   selLayer=Math.min(selLayer, layers.length-1);
   renderLayers(); loadLayerEditor(); histLock=false;
@@ -5309,12 +5328,35 @@ function jointsModele(){
 }
 /** Repère orthonormé autour d'un axe, stable d'un modèle à l'autre :
  *  la référence est la verticale, sauf pour un segment déjà vertical. */
-function repereAutour(axe){
-  const ref = Math.abs(axe.y)>0.85 ? new THREE.Vector3(0,0,1) : new THREE.Vector3(0,1,0);
+function repereAutour(axe, version){
+  /* La référence décide de l'origine des angles autour du membre : c'est elle
+     qui dit « ce motif était sur le devant de l'avant-bras ». Prise sur la
+     verticale du monde (version 0), elle se dégrade dès que le membre pend
+     lui-même à la verticale — les deux vecteurs deviennent presque colinéaires
+     et le repère pivote follement pour un très petit changement d'angle du
+     membre. Mesuré entre Homme et Super, dont les bras et jambes ne pendent
+     pas tout à fait pareil : l'origine des angles dérivait de 35° sur
+     l'avant-bras et de 39,5° sur le mollet. Un motif reporté d'un corps à
+     l'autre se retrouvait donc tourné d'autant autour du membre — il
+     « sautait » sur l'autre face. Un anneau complet masquait le défaut, pas
+     un motif partiel.
+     La référence est désormais l'avant du corps : perpendiculaire à un membre
+     qui pend, elle reste bien conditionnée, et l'angle mémorisé garde un sens
+     anatomique — « tant de degrés depuis la face avant du membre ». Même
+     mesure, même corps : dérive 0,0° sur les quatre membres. On ne bascule
+     sur la verticale que pour un membre pointant vers l'avant, où c'est
+     l'avant du corps qui deviendrait colinéaire. */
+  const ref = version ? (Math.abs(axe.z)>0.85 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(0,0,1))
+                      : (Math.abs(axe.y)>0.85 ? new THREE.Vector3(0,0,1) : new THREE.Vector3(0,1,0));
   const u=new THREE.Vector3().crossVectors(ref,axe).normalize();
   const v=new THREE.Vector3().crossVectors(axe,u).normalize();
   return {u,v};
 }
+/* Version du repère portée par chaque ancrage. Les projets enregistrés avant
+   la correction n'en ont pas : ils continuent d'être lus dans l'ancien repère,
+   pour que rien ne bouge sous les pieds de l'utilisateur, et sont convertis
+   au chargement du projet, une fois posés sur le corps qui les a vus naître. */
+const REPERE_VERSION = 1;
 /** Ancrage d'un point sur le squelette, dans le repère de l'os le plus
  *  proche et en fractions de sa longueur.
  *  L'ancien repérage cylindrique (position le long de l'os, angle autour,
@@ -5351,11 +5393,11 @@ function ancrerSurSquelette(pos, nrm){
   if(!best) return null;
   const axe=best.ab.clone().normalize();
   const L=longueurSegment(best.id, best.A, best.A.clone().add(best.ab));
-  const {u,v}=repereAutour(axe);
+  const {u,v}=repereAutour(axe, REPERE_VERSION);
   const d=new THREE.Vector3().subVectors(pos,best.A);
   const rad=new THREE.Vector3().subVectors(pos,best.proj);
   const n=nrm ? nrm.clone().normalize() : rad.clone().normalize();
-  return {seg:best.id,
+  return {seg:best.id, f:REPERE_VERSION,
           a:d.dot(axe)/L, b:d.dot(u)/L, c:d.dot(v)/L,
           na:n.dot(axe), nb:n.dot(u), nc:n.dot(v),
           // format cylindrique conservé : les projets déjà enregistrés le lisent
@@ -5370,7 +5412,7 @@ function pointDepuisAncre(anc){
   if(ab.lengthSq()<1e-18) return null;
   const axe=ab.clone().normalize();
   const L=longueurSegment(anc.seg, A, B); if(L<1e-9) return null;
-  const {u,v}=repereAutour(axe);
+  const {u,v}=repereAutour(axe, anc.f||0);
   if(anc.a!==undefined){
     const cible=A.clone().addScaledVector(axe,anc.a*L)
                          .addScaledVector(u,  anc.b*L)
@@ -5508,8 +5550,14 @@ function resnapLayers(){
       // centimètres sur Homme en font dix-sept sur Super, dont le torse est
       // d'autant plus large.
       try{
-        const a=ampleurLocale(l);
-        if(a && l.ampleur){
+        const A=ampleurLocale(l);
+        const a=A?A.v:null;
+        /* Même nature de mesure aux deux bouts, sinon on ne transpose pas :
+           comparer un tour de membre à une épaisseur de corps donnait un
+           rapport arbitraire. Le calque garde alors sa taille, ce qui est
+           toujours plus juste qu'un redimensionnement au hasard. */
+        const memeMesure = A && l.ampleurM ? A.m===l.ampleurM : !!A;
+        if(a && l.ampleur && memeMesure){
           /* Rapport adouci plutôt que proportionnel : un tatouage ne grandit
              pas comme la masse de celui qui le porte. Suivre le rapport brut
              portait un motif de 12 cm à 32 cm sur Super, et un dessin si
@@ -5530,14 +5578,14 @@ function resnapLayers(){
              dériver l'enroulement dès le second aller-retour, le plafond
              ayant déjà entamé l'information de départ. */
           l.sizeLin = (l.sizeLin!=null ? l.sizeLin : l.size) * kLin;
-          majEnroulementAuto(l, l.sizeLin, a);
+          majEnroulementAuto(l, l.sizeLin, A.m==='tour' ? a : undefined);
           const k=clamp(Math.pow(kLin, 0.65), 0.65, 1.8);
           if(Math.abs(k-1)>0.02){
             l.size=clamp(l.size*k, 1, 95);
             if(!l.depthLock) l.depth=clamp(l.size*1.25,4,40);
           }
         } else majEnroulementAuto(l);
-        if(a) l.ampleur=a;
+        if(A){ l.ampleur=A.v; l.ampleurM=A.m; }
       }catch(e){ majEnroulementAuto(l); }
       l.canon  = l.pos.clone().applyMatrix4(anatXformInv);
       l.canonN = l.normal.clone();

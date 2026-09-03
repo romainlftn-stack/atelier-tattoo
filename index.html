@@ -4645,6 +4645,7 @@ function addLayer(flashId, pos, normal, mesh){
   l.anc  = ancrerSurSquelette(pos, normal);
   l.region = regionOf(depuisNorm(l.norm,'anat'));
   try{ l.ampleur=ampleurLocale(l); }catch(e){}
+  l.sizeLin = l.size;
   majEnroulementAuto(l);
   layers.push(l);
   refreshLayerMaterial(l);
@@ -4869,17 +4870,21 @@ function loadLayerEditor(){
  *  déplié, il se brise à la jonction, à l'arrière. On l'enroule alors de
  *  lui-même — à la pose comme au changement de taille. Dès que l'on touche
  *  au réglage Projection, ce choix devient manuel et l'on n'y revient plus. */
-function majEnroulementAuto(l){
+/** tailleTest / tourConnu : pour juger l'enroulement sur une taille autre que
+ *  l.size déjà en place (report d'un corps à l'autre, voir resnapLayers) sans
+ *  recalculer une circonférence déjà connue. */
+function majEnroulementAuto(l, tailleTest, tourConnu){
   if(!l) return;
   try{
-    const tour=circonferenceMembre(l);
+    const tour = tourConnu!==undefined ? tourConnu : circonferenceMembre(l);
+    const taille = tailleTest!==undefined ? tailleTest : l.size;
     /* Le dépliage suit la morphologie au millimètre — mesuré : distorsion
        médiane 1,01 et jamais plus de 1,04. L'enroulement cylindrique, lui,
        suppose une section circulaire et déforme dès que le membre s'écarte
        du cylindre : genou, coude, cheville. On ne l'emploie donc que pour ce
        que le dépliage ne sait pas faire — refermer un motif qui fait le tour
        complet. En deçà, le dépliage s'arrête proprement. */
-    l.wrap = (tour && l.size >= tour*0.85) ? 1 : 0;
+    l.wrap = (tour && taille >= tour*0.85) ? 1 : 0;
   }catch(e){}
 }
 /* Report d'un corps à l'autre : garder la taille en centimètres donne un
@@ -4952,6 +4957,7 @@ function serializeLayers(){
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked,
     visible:l.visible, wrap:l.wrap||0, ampleur:l.ampleur||null,
+    sizeLin:l.sizeLin!=null?l.sizeLin:l.size,
     dossier:l.dossier||null, dossierId:l.dossierId||null}));
 }
 function restoreLayers(arr, dossier, dossierId){
@@ -5498,15 +5504,28 @@ function resnapLayers(){
              corps est irréprochable, à 32 il se dégrade. L'exposant se
              compense d'un aller-retour à l'autre : revenir sur Homme redonne
              exactement la taille de départ. */
-          const k=clamp(Math.pow(a/l.ampleur, 0.65), 0.65, 1.8);
+          const kLin=a/l.ampleur;
+          /* L'enroulement, lui, doit suivre le rapport RÉEL avec la
+             circonférence — pas la taille affichée, freinée exprès. Un
+             bracelet qui bouclait le poignet sur Homme (mesuré) se
+             retrouvait, sous ce frein, trop étroit pour boucler le poignet
+             bien plus large de Super : il se dépliait à plat au lieu de
+             s'enrouler. On calcule donc l'enroulement sur une taille suivie
+             à part, au rapport linéaire pur — jamais freinée ni bornée.
+             La taille affichée, elle, l'est aux deux (0.65, plafond 1.8) :
+             la relire pour amorcer chaque nouveau transfert aurait fait
+             dériver l'enroulement dès le second aller-retour, le plafond
+             ayant déjà entamé l'information de départ. */
+          l.sizeLin = (l.sizeLin!=null ? l.sizeLin : l.size) * kLin;
+          majEnroulementAuto(l, l.sizeLin, a);
+          const k=clamp(Math.pow(kLin, 0.65), 0.65, 1.8);
           if(Math.abs(k-1)>0.02){
             l.size=clamp(l.size*k, 1, 95);
             if(!l.depthLock) l.depth=clamp(l.size*1.25,4,40);
           }
-        }
+        } else majEnroulementAuto(l);
         if(a) l.ampleur=a;
-      }catch(e){}
-      majEnroulementAuto(l);
+      }catch(e){ majEnroulementAuto(l); }
       l.canon  = l.pos.clone().applyMatrix4(anatXformInv);
       l.canonN = l.normal.clone();
       // On ne réécrit pas l.norm : elle reste l'ancrage anatomique d'origine,
@@ -5678,7 +5697,7 @@ $('btnCutApply').addEventListener('click',()=>{
    12 cm posé sur un avant-bras, la boîte de projection ne faisait que
    6,6 cm de fond et tranchait le dessin. Les faces opposées étant désormais
    écartées (couperDos), on peut viser large sans déborder de l'autre côté. */
-bind('tSize',   v=>editLayer(l=>{ l.size=v; if(!l.depthLock){ l.depth=clamp(v*1.25,4,40); setCtl('tDepth',l.depth); }
+bind('tSize',   v=>editLayer(l=>{ l.size=v; l.sizeLin=v; if(!l.depthLock){ l.depth=clamp(v*1.25,4,40); setCtl('tDepth',l.depth); }
                                   majEnroulementAuto(l); }), v=>v.toFixed(1));
 bind('tRot',    v=>editLayer(l=>l.rot=v),     v=>Math.round(v)+'°');
 bind('tDepth',  v=>editLayer(l=>{ l.depth=v; l.depthLock=true; }), v=>v.toFixed(1));
@@ -6354,19 +6373,34 @@ function faireBindProxy(sm){
   return m;
 }
 
-let _chargementCorpsEnCours=false;
+let _chargementCorpsEnCours=false, _chargementCorpsQuiTourne=null, _prochainCorpsDemande=null;
 async function chargerCorps(cle){
   // Un double déclenchement (double-clic, ou deux gestionnaires qui
   // retombent tous deux sur le même appel) lance deux chargements
   // concurrents ; le second efface via clearModel() l'état que le premier
   // est en train de construire, et plus rien n'aboutit jamais. On protège
   // donc l'entrée de la fonction contre tout appel pendant qu'un autre tourne.
-  if(_chargementCorpsEnCours) return;
+  if(_chargementCorpsEnCours){
+    // Refuser tout court ne suffisait pas : l'appelant fait
+    // chargerCorps(x).then(()=>resnapLayers()), et cette promesse résolvait
+    // aussitôt même sans rien avoir chargé. resnapLayers tournait alors
+    // contre le corps encore affiché — parfois déjà vidé par clearModel(),
+    // bodyMeshes tombant à zéro — et chaque calque, ne trouvant plus rien à
+    // toucher, disparaissait un instant : le « saut » vu en changeant vite
+    // de modèle. On mémorise donc la demande la plus récente et on attend
+    // la fin du chargement en cours avant de la rejouer — seule la toute
+    // dernière demande survit, les intermédiaires sont silencieusement
+    // abandonnées, comme un debounce.
+    _prochainCorpsDemande=cle;
+    await _chargementCorpsQuiTourne;
+    if(_prochainCorpsDemande===cle){ _prochainCorpsDemande=null; return chargerCorps(cle); }
+    return;
+  }
   // Un rebuild du corps procédural encore en attente n'a plus lieu d'être.
   clearTimeout(rebuildTimer);
   _chargementCorpsEnCours=true;
-  try{ await _chargerCorpsInterne(cle); }
-  finally{ _chargementCorpsEnCours=false; }
+  _chargementCorpsQuiTourne = _chargerCorpsInterne(cle).finally(()=>{ _chargementCorpsEnCours=false; });
+  await _chargementCorpsQuiTourne;
 }
 async function _chargerCorpsInterne(cle){
   const def=CORPS[cle]; if(!def) return;

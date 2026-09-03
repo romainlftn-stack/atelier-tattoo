@@ -3,9 +3,12 @@
 # retravailler un corps plus tard, mais jamais dans le dépôt.
 modeles-source/
 
-# Animations Mixamo déposées avant conversion en GLB, et les paquets
-# préparés pour l'upload — l'atelier n'a besoin que du résultat, dans corps/.
-animations/
+# Animations Mixamo déposées avant conversion, et les paquets préparés pour
+# l'upload — l'atelier n'a besoin que du résultat. Exception : vol.json, le
+# mouvement « Vol » recompilé depuis « Treading Water.fbx », que le site
+# charge à l'exécution et qui doit donc être publié.
+animations/*
+!animations/vol.json
 pour-mixamo/
 
 # Fichiers système

@@ -112,7 +112,7 @@ button,.chip,.sw,.gitem,.layer,.ic,.seg button,.seg2 button{touch-action:manipul
   display:flex;flex-wrap:wrap;gap:6px;width:100%}
 /* Pause tient toute la largeur en tête : c'est l'état de repos, celui où
    l'on pose les motifs. Les quatre animations suivent, deux par ligne. */
-#animBar.docked button[data-a="__stop"]{flex:1 1 100%}
+#animBar.docked button[data-a="__stop"]{flex:1 1 44%}
 #animBar.docked button{flex:1 1 44%;background:var(--elev1);border:1px solid var(--line);
   color:var(--txt2);border-radius:8px;padding:9px 6px;font-size:11.5px}
 #animBar.docked button:hover{color:var(--txt);background:var(--elev2)}
@@ -686,6 +686,7 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
   <div id="stage">
     <div id="animBar" style="display:none">
       <button data-a="__stop" class="on" title="Pose figée">Pause</button>
+      <button id="btnVol" data-a="vol" title="Mouvement suspendu : bras et jambes dégagés" hidden>Vol</button>
       <button data-a="walk">Marche</button>
       <button data-a="run">Course</button>
       <button data-a="fight">Combat</button>
@@ -766,7 +767,7 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
       <h3><span>Animations</span><span class="tagctx">Corps</span><span class="chev">▼</span></h3>
       <div class="body">
         <div id="animSlot"></div>
-        <div class="hint">Les tatouages se posent à l'arrêt : choisir Pause avant de placer un motif.</div>
+        <div class="hint">Les tatouages se posent à l'arrêt.</div>
       </div>
     </div>
 
@@ -4971,15 +4972,39 @@ function restoreLayers(arr, dossier, dossierId){
   selLayer=Math.min(selLayer, layers.length-1);
   renderLayers(); loadLayerEditor(); histLock=false;
 }
+/* Les sources lumineuses sont versionnées avec les calques : ajouter, retirer
+   ou changer d'ambiance sont des actions que Cmd+Z doit défaire, exactement
+   comme la pose d'un motif. Seule la structure de l'éclairage est mémorisée —
+   pousser aussi chaque glissement de curseur noierait l'historique. */
+function serializeLights(){
+  return lights.map(L=>({n:L.name, t:L.type, i:L.intensity, k:L.temp, c:L.color, a:L.angle,
+    p:L.pen, d:L.dist, az:L.az, el:L.el, sh:L.shadow, key:L.key, on:L.on}));
+}
+function restoreLights(arr){
+  if(!arr || !arr.length) return;
+  lights.forEach(L=>{ lightGroup.remove(L.obj); if(L.target) lightGroup.remove(L.target); if(L.helper) helperG.remove(L.helper); });
+  lights = arr.map(d=>{ const L=makeLight(d); L.on = d.on!==false; return L; });
+  selLight = clamp(selLight, 0, lights.length-1);
+  lights.forEach(syncLight);
+  renderLightList(); loadLightEditor(); updateGizmo(); markDirty();
+}
 function pushHistory(){
   if(histLock) return;
   hist=hist.slice(0,histAt+1);
-  hist.push(JSON.stringify(serializeLayers()));
+  hist.push(JSON.stringify({l:serializeLayers(), e:serializeLights()}));
   if(hist.length>60) hist.shift();
   histAt=hist.length-1;
 }
-function undo(){ if(histAt<=0){ toast('Rien à annuler'); return; } histAt--; restoreLayers(JSON.parse(hist[histAt])); toast('Annulé'); }
-function redo(){ if(histAt>=hist.length-1){ toast('Rien à rétablir'); return; } histAt++; restoreLayers(JSON.parse(hist[histAt])); toast('Rétabli'); }
+/* Rejouer un état ne reconstruit les lumières que si elles ont réellement
+   changé : les rebâtir à chaque annulation de calque relancerait les cartes
+   d'ombre pour rien et ferait clignoter la scène. */
+function appliquerEtat(i){
+  const e=JSON.parse(hist[i]);
+  if(JSON.stringify(e.e||[]) !== JSON.stringify(serializeLights())) restoreLights(e.e);
+  restoreLayers(e.l||[]);
+}
+function undo(){ if(histAt<=0){ toast('Rien à annuler'); return; } histAt--; appliquerEtat(histAt); toast('Annulé'); }
+function redo(){ if(histAt>=hist.length-1){ toast('Rien à rétablir'); return; } histAt++; appliquerEtat(histAt); toast('Rétabli'); }
 pushHistory();
 
 /* =====================================================================
@@ -5685,7 +5710,7 @@ $('btnDel').addEventListener('click',()=>{
 });
 
 // --- lumières
-$('lightPreset').addEventListener('change',e=>{ applyPreset(e.target.value); toast('Ambiance : '+e.target.selectedOptions[0].text); });
+$('lightPreset').addEventListener('change',e=>{ applyPreset(e.target.value); pushHistory(); toast('Ambiance : '+e.target.selectedOptions[0].text); });
 $('lType').addEventListener('change',e=>editLight(L=>{ L.type=e.target.value; buildLightObj(L); }));
 $('lName').addEventListener('input',e=>editLight(L=>L.name=e.target.value));
 $('lColor').addEventListener('input',e=>editLight(L=>L.color=e.target.value));
@@ -5703,13 +5728,13 @@ $('btnAddLight').addEventListener('click',()=>{
   const [az,el]=$('newLightPos').value.split(',').map(Number);
   const nom=$('newLightPos').selectedOptions[0].textContent;
   lights.push(makeLight({n:nom, t, i:80, k:5600, az, el, a:45, p:0.8, d:300}));
-  selLight=lights.length-1; renderLightList(); loadLightEditor(); updateGizmo();
+  selLight=lights.length-1; renderLightList(); loadLightEditor(); updateGizmo(); pushHistory();
 });
 $('btnDelLight').addEventListener('click',()=>{
   if(lights.length<=1){ toast('Il faut au moins une source', true); return; }
   const L=lights[selLight];
   lightGroup.remove(L.obj); if(L.target) lightGroup.remove(L.target); if(L.helper) helperG.remove(L.helper);
-  lights.splice(selLight,1); selLight=0; renderLightList(); loadLightEditor(); updateGizmo();
+  lights.splice(selLight,1); selLight=0; renderLightList(); loadLightEditor(); updateGizmo(); pushHistory();
 });
 bind('gExp', v=>{ renderer.toneMappingExposure=v/100; }, v=>(v/100).toFixed(2));
 bind('gPower', ()=>lights.forEach(syncLight));
@@ -6404,6 +6429,12 @@ async function _chargerCorpsInterne(cle){
   // sous-arbre pour pouvoir revenir exactement à la pose de repos.
   poseRepos=[];
   racine.traverse(o=>{ poseRepos.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
+  // Le mouvement « Vol » vient d'un fichier séparé : on le recible sur ce
+  // squelette-ci avant de traiter les clips comme ceux du GLB.
+  let clVol=null;
+  try{ clVol=clipVol(await chargerVol(), g, racine); }catch(e){ clVol=null; }
+  if(clVol) g.animations.push(clVol);
+  $('btnVol').hidden = !clVol;
   // Les clips sont réancrés sur la pose de repos, relevée avant toute animation.
   g.animations.forEach(cl=>figerRacineClip(cl, hauteurNative, racine));
   mixer = g.animations.length ? new THREE.AnimationMixer(racine) : null;
@@ -6426,6 +6457,55 @@ async function _chargerCorpsInterne(cle){
   lights.forEach(syncLight); fitView(); markDirty();
   syncModelRows(); renderLayers();
   toast(def.nom+' — '+g.animations.length+' animation(s)');
+}
+
+/* ---------------------------------------------------------------------
+   Animation « Vol » — mouvement Mixamo importé hors des GLB.
+   Il est stocké une seule fois (animations/vol.json, 128 ko, 27 ko gzippés)
+   en noms d'os canoniques, parce que les trois corps n'ont pas le même
+   squelette : 52 os pour Homme, 60 aux noms suffixés « _1 » / « _2 » pour
+   Femme, 28 seulement pour Super. Un fichier par modèle aurait triplé le
+   poids pour trois contenus quasi identiques ; on recible donc les pistes
+   au chargement sur les noeuds que les clips d'origine du modèle pilotent
+   déjà — ceux-là sont connus bons. Les os absents du modèle (Super n'a ni
+   doigts ni orteils) sont simplement laissés de côté.
+   --------------------------------------------------------------------- */
+let volBrut=null, volIndisponible=false;
+async function chargerVol(){
+  if(volBrut || volIndisponible) return volBrut;
+  try{
+    const r=await fetch('animations/vol.json?v='+ASSET_V);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    volBrut=await r.json();
+  }catch(e){ volIndisponible=true; }
+  return volBrut;
+}
+const osCanonique = n => n.replace(/^mixamorig\d*:?/i,'').replace(/_\d+$/,'').toLowerCase();
+function clipVol(brut, g, racine){
+  if(!brut) return null;
+  /* Femme est livrée en plusieurs maillages, chacun avec sa copie du
+     squelette : trois.js dédoublonne les noms en « mixamorigHips »,
+     « mixamorigHips_1 », « mixamorigHips_2 »… Ne piloter qu'un jumeau par os
+     déchirait le corps — épaules et hanches restaient en arrière pendant que
+     le reste bougeait. On pilote donc TOUS les noeuds qui portent le même os :
+     les copies inutilisées ne coûtent qu'une piste, et plus rien ne se
+     désolidarise quel que soit le squelette auquel la peau est attachée. */
+  const cibles=new Map();
+  const noter=n=>{ const k=osCanonique(n); (cibles.get(k) || cibles.set(k,new Set()).get(k)).add(n); };
+  g.animations.forEach(c=>c.tracks.forEach(t=>noter(t.name.split('.')[0])));
+  racine.traverse(o=>{ if(o.isBone) noter(o.name); });
+  const temps=new Float32Array(brut.images);
+  for(let i=0;i<brut.images;i++) temps[i]=i/brut.fps;
+  const pistes=[];
+  for(const os in brut.pistes){
+    const noms=cibles.get(osCanonique(os)); if(!noms) continue;
+    const p=brut.pistes[os];
+    noms.forEach(nom=>{
+      if(p.quaternion) pistes.push(new THREE.QuaternionKeyframeTrack(nom+'.quaternion', temps, p.quaternion));
+      if(p.position)   pistes.push(new THREE.VectorKeyframeTrack(nom+'.position', temps, p.position));
+    });
+  }
+  return pistes.length ? new THREE.AnimationClip('vol', brut.duree, pistes) : null;
 }
 
 /** Neutralise le déplacement d'ensemble d'un clip Mixamo.

@@ -559,7 +559,7 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
           <div style="font-size:10px;margin-top:3px;opacity:.7">ou cliquer pour parcourir</div>
         </div>
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
-        <div class="btnrow"><button class="btn" id="btnSample">Charger un motif d'exemple</button></div>
+        <div class="btnrow"><button class="btn" id="btnSample">Charger des motifs d'exemple</button></div>
         <div id="gallery"></div>
         <div class="hint" id="galHint">Le fond blanc des JPG est détouré automatiquement, seule l'encre est conservée.</div>
       </div>
@@ -3805,43 +3805,63 @@ function updateCut(){
   }, 110);
 }
 
-/* ---------- Motif d'exemple (JPG fond blanc, pour tester le détourage) ---------- */
-function sampleFlashImage(){
-  const c=mkCanvas(760,1000), x=c.getContext('2d');
-  x.fillStyle='#fff'; x.fillRect(0,0,760,1000);
-  x.strokeStyle='#111'; x.fillStyle='#111'; x.lineCap='round'; x.lineJoin='round';
-  // croissant de lune
-  x.beginPath(); x.arc(380,300,178,0,7); x.arc(452,272,164,0,7,true); x.fill('evenodd');
-  // dague
-  x.lineWidth=15; x.beginPath(); x.moveTo(380,432); x.lineTo(380,872); x.stroke();
-  x.lineWidth=13; x.beginPath(); x.moveTo(276,516); x.lineTo(484,516); x.stroke();
-  x.beginPath(); x.moveTo(342,872); x.lineTo(380,958); x.lineTo(418,872); x.closePath(); x.fill();
-  x.lineWidth=10; x.beginPath(); x.arc(380,492,26,0,7); x.stroke();
-  // couronne de rayons
-  x.lineWidth=6;
-  for(let i=0;i<18;i++){ const a=i/18*Math.PI*2, r0=222, r1=i%2?258:246;
-    x.beginPath(); x.moveTo(380+Math.cos(a)*r0,300+Math.sin(a)*r0);
-    x.lineTo(380+Math.cos(a)*r1,300+Math.sin(a)*r1); x.stroke(); }
-  x.lineWidth=8; x.beginPath(); x.arc(380,300,290,0,7); x.stroke();
-  x.lineWidth=3; x.beginPath(); x.arc(380,300,276,0,7); x.stroke();
-  // hachures d'ombrage
-  x.lineWidth=3;
-  for(let i=0;i<26;i++){ const y=600+i*9; x.globalAlpha=0.55;
-    x.beginPath(); x.moveTo(392,y); x.lineTo(392+38-i*0.9,y-14); x.stroke(); }
-  x.globalAlpha=1;
-  const im=new Image();
-  im.src=c.toDataURL('image/jpeg',0.92);   // volontairement en JPG : teste le détourage du fond blanc
-  return im;
+/* ---------- Motifs d'exemple ------------------------------------------------
+   Trois formes géométriques simples plutôt qu'un dessin figuratif : elles
+   montrent d'un coup d'œil si le motif suit la peau et si quelque chose est
+   coupé — un cercle ovalisé ou un trait interrompu se repèrent aussitôt.
+   Elles restent volontairement en JPG sur fond blanc, pour que le détourage
+   automatique ait quelque chose à faire.                                    */
+function fondBlanc(x,w,h){ x.fillStyle='#fff'; x.fillRect(0,0,w,h);
+  x.strokeStyle='#111'; x.fillStyle='#111'; x.lineCap='round'; x.lineJoin='round'; }
+
+/** Deux cercles concentriques. */
+function motifCercles(){
+  const c=mkCanvas(820,820), x=c.getContext('2d');
+  fondBlanc(x,820,820);
+  x.lineWidth=28; x.beginPath(); x.arc(410,410,338,0,7); x.stroke();
+  x.lineWidth=20; x.beginPath(); x.arc(410,410,166,0,7); x.stroke();
+  return c;
 }
+/** Deux triangles opposés, pointe contre pointe. */
+function motifTriangles(){
+  const c=mkCanvas(720,1000), x=c.getContext('2d');
+  fondBlanc(x,720,1000);
+  x.lineWidth=26;
+  x.beginPath(); x.moveTo(80,70); x.lineTo(640,70); x.lineTo(360,500); x.closePath(); x.stroke();
+  x.beginPath(); x.moveTo(80,930); x.lineTo(640,930); x.lineTo(360,500); x.closePath(); x.stroke();
+  return c;
+}
+/** Un rectangle traversé dans sa longueur. */
+function motifRectangle(){
+  const c=mkCanvas(1000,460), x=c.getContext('2d');
+  fondBlanc(x,1000,460);
+  x.lineWidth=26; x.strokeRect(110,110,780,240);
+  x.lineWidth=18; x.beginPath(); x.moveTo(30,230); x.lineTo(970,230); x.stroke();
+  return c;
+}
+const MOTIFS_EXEMPLE=[
+  ['exemple-cercles.jpg',   motifCercles],
+  ['exemple-triangles.jpg', motifTriangles],
+  ['exemple-rectangle.jpg', motifRectangle]
+];
 function loadSample(place){
-  const im=sampleFlashImage();
-  const go=()=>{
-    const f=addFlash(im,'exemple-dague.jpg');
-    setMode('place');
-    toast('Motif d’exemple chargé — cliquez sur le corps pour le poser');
-    if(place) demoPlace(f);
-  };
-  if(im.complete && im.naturalWidth) go(); else im.onload=go;
+  let restant=MOTIFS_EXEMPLE.length, premier=null;
+  MOTIFS_EXEMPLE.forEach(([nom,dessin],i)=>{
+    const im=new Image();
+    const go=()=>{
+      const f=addFlash(im, nom);
+      if(i===0) premier=f;
+      if(--restant===0){
+        // on rend la main sur le premier motif : c'est celui que l'on voit
+        selFlash=0; renderGallery(); loadCutEditor(); drawCutPreview();
+        setMode('place');
+        toast('Trois motifs d’exemple chargés — choisissez-en un et cliquez sur le corps');
+        if(place && premier) demoPlace(premier);
+      }
+    };
+    im.src=dessin().toDataURL('image/jpeg',0.92);   // JPG : le détourage a du grain à moudre
+    if(im.complete && im.naturalWidth) go(); else im.onload=go;
+  });
 }
 function demoPlace(f){
   const bm=bodyMeshes; if(!bm.length) return;
@@ -4526,6 +4546,9 @@ function deleteLayer(l, silent){
   selLayer=Math.min(selLayer, layers.length-1);
   if(!silent){ renderLayers(); loadLayerEditor(); pushHistory(); }
   if(!layers.length) selRing.visible=false;
+  // Le rendu ne se fait qu'à la demande : sans cela le calque restait affiché
+  // jusqu'au prochain mouvement de souris, comme s'il refusait de partir.
+  markDirty();
 }
 function duplicateLayer(l){
   const c=Object.assign({},l,{id:uid(), meshes:[], tex:null, bump:null, mat:null,

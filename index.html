@@ -261,7 +261,16 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 #authModal input,#promptModal input{background:var(--pan2);border:1px solid var(--line);
   border-radius:7px;padding:8px 10px;color:var(--txt);font:inherit;width:100%}
 #authErreur:empty,#promptErreur:empty{display:none}
-#compteZone{position:relative}
+#compteZone,#zoneDisque{position:relative}
+#btnDisque .ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;
+  stroke-linejoin:round;stroke-linecap:round}
+#menuDisque{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);
+  border:1px solid var(--line);border-radius:9px;min-width:180px;padding:6px;
+  box-shadow:0 14px 34px var(--shadow);z-index:70;display:none}
+#menuDisque.show{display:flex;flex-direction:column;gap:2px}
+#menuDisque button{width:100%;justify-content:flex-start;background:none;border:none;
+  color:var(--txt);font-size:12.5px;padding:8px 10px;border-radius:6px;height:auto}
+#menuDisque button:hover{background:var(--pan2)}
 #btnCompte.connecte{background:var(--acc);border-color:var(--acc);color:#fff}
 #btnCompte .ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
 #menuCompte{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);
@@ -358,6 +367,9 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
   #mobMenu .mm-row{display:flex;gap:6px;flex-wrap:wrap}
   #mobMenu .mm-row .tb{flex:1 1 30%;justify-content:center;height:38px}
   #btnCompte{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Sur mobile, Sauvegarder et Ouvrir repartent tels quels dans le menu
+     Projet : la pastille qui les regroupe sur grand écran n'a plus lieu d'être. */
+  #zoneDisque{display:none}
 
   /* Pile d'actions : un bouton principal (ajouter un motif) et deux
      secondaires de même gabarit, alignés sur le même axe et espacés
@@ -511,9 +523,17 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
     <div class="spacer"></div>
     <button class="tb" id="btnUndo" title="Annuler (Cmd/Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M3 10h11a5 5 0 0 1 0 10h-3"/><path d="M3 10l5-5M3 10l5 5"/></svg></button>
     <button class="tb" id="btnRedo" title="Rétablir (Cmd/Ctrl+Shift+Z)"><svg viewBox="0 0 24 24"><path d="M21 10H10a5 5 0 0 0 0 10h3"/><path d="M21 10l-5-5M21 10l-5 5"/></svg></button>
-    <button class="tb" id="btnShot" title="Exporter le rendu (P)"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.6"/></svg>Rendu</button>
-    <button class="tb" id="btnSave" title="Sauvegarder le projet">Sauver</button>
-    <button class="tb" id="btnLoad" title="Charger un projet">Charger</button>
+    <button class="tb" id="btnShot" title="Exporter le rendu (P)" aria-label="Exporter le rendu"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.6"/></svg></button>
+    <!-- Sauver et Charger tenaient deux places dans un bandeau étroit pour
+         deux gestes rares. Une seule pastille les regroupe ; sur mobile les
+         deux boutons repartent tels quels dans le menu Projet. -->
+    <div id="zoneDisque">
+      <button class="tb" id="btnDisque" title="Sauvegarder ou ouvrir un projet" aria-label="Projet"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h7V3"/><path d="M8 14h8v7H8z"/></svg></button>
+      <div id="menuDisque">
+        <button class="tb" id="btnSave" title="Sauvegarder le projet dans un fichier">Sauvegarder…</button>
+        <button class="tb" id="btnLoad" title="Ouvrir un projet enregistré">Ouvrir un projet…</button>
+      </div>
+    </div>
     <button class="tb" id="btnTheme" title="Thème clair / sombre">☾</button>
     <button class="tb" id="btnHelp" title="Aide (?)">?</button>
     <div id="compteZone">
@@ -4272,11 +4292,25 @@ function decalSurPeau(bm, l, w, h, rot){
   const vu=new Uint8Array(nPr); vu[seed]=1;
   const file=new Int32Array(nPr); let fq=0, fw=0; file[fw++]=seed;
   const garde=new Int32Array(nPr); let ng=0;
+  /* Garde-fou contre les repliements. Le dépliage conserve les longueurs :
+     la distance d'un sommet au point posé, mesurée à plat, vaut donc son
+     chemin le long de la peau, toujours plus long que la corde qui les
+     sépare dans l'espace. Quand cette inégalité s'inverse, c'est que le
+     dépliage s'est replié sur lui-même ou a sauté sur une surface qui n'est
+     voisine que par contact — un bras collé au torse, deux pièces du corps
+     qui se touchent. C'est ce qui semait des lambeaux de motif à distance.
+     On refuse alors le triangle, et on cesse d'avancer par là. */
+  const coherent=(i)=>{
+    const du=Math.sqrt(U[i]*U[i]+V[i]*V[i]);
+    const dx=PX[i]-Px, dy=PY[i]-Py, dz=PZ[i]-Pz;
+    return Math.sqrt(dx*dx+dy*dy+dz*dz) <= du*1.12 + 0.006;
+  };
   while(fq<fw){
     const ti=file[fq++];
     const t0=TA[ti*3], t1=TA[ti*3+1], t2=TA[ti*3+2];
     const u0=U[t0],u1=U[t1],u2=U[t2], v0=V[t0],v1=V[t1],v2=V[t2];
     if(u0!==u0 || u1!==u1 || u2!==u2) continue;
+    if(!coherent(t0)||!coherent(t1)||!coherent(t2)) continue;
     // Hors du cadre : on ne le garde pas et on ne propage pas au-delà — le
     // cadre étant convexe, rien d'utile ne se trouve derrière.
     if((u0<-dw&&u1<-dw&&u2<-dw)||(u0>dw&&u1>dw&&u2>dw)) continue;
@@ -5623,6 +5657,7 @@ $('btnCompte').addEventListener('click',()=>{
 });
 document.addEventListener('click',e=>{
   if(!$('compteZone').contains(e.target)) $('menuCompte').classList.remove('show');
+  if(!$('zoneDisque').contains(e.target)) $('menuDisque').classList.remove('show');
 });
 $('btnDeconnecter').addEventListener('click', async ()=>{
   await sb.auth.signOut(); $('menuCompte').classList.remove('show'); toast('Déconnecté');
@@ -5727,6 +5762,7 @@ $('configsToggle').addEventListener('click',()=>{
 
 
 /* ---------- Projet : sauvegarde / chargement ---------- */
+$('menuDisque').addEventListener('click',()=>$('menuDisque').classList.remove('show'));
 $('btnSave').addEventListener('click',()=>{
   const data={
     v:1, kind:modelKind,
@@ -5745,6 +5781,11 @@ $('btnSave').addEventListener('click',()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(b); a.download='projet-tattoo-'+Date.now()+'.json'; a.click();
   toast('Projet sauvegardé');
+});
+$('btnDisque').addEventListener('click',e=>{
+  e.stopPropagation();
+  $('menuDisque').classList.toggle('show');
+  $('menuCompte').classList.remove('show');
 });
 $('btnLoad').addEventListener('click',()=>$('projInput').click());
 $('projInput').addEventListener('change',e=>{

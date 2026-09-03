@@ -4814,9 +4814,10 @@ function setMode(m){
   canvas.classList.toggle('place', m==='place');
   if(m!=='place'){ calqueSurvole=null; canvas.style.cursor=''; }
   majAnneau();
+  const cmd = /Mac|iP(hone|ad|od)/.test(navigator.platform||'') ? 'Cmd' : 'Ctrl';
   $('hudTip').textContent = m==='place'
-    ? 'Cliquez sur la peau pour poser le motif · cliquez un tatouage pour le sélectionner et le déplacer'
-    : 'Clic gauche : orbiter · Molette : zoom · Clic droit : translater';
+    ? 'Cliquez sur la peau pour poser le motif · cliquez un tatouage pour le déplacer · '+cmd+' : translater la vue'
+    : 'Clic gauche : orbiter · Molette : zoom · Clic droit ou '+cmd+' : translater';
 }
 const ray=new THREE.Raycaster(), ptr=new THREE.Vector2();
 let drag=null, needRebuild=null;
@@ -4844,9 +4845,29 @@ function worldNormal(hit){
   n.transformDirection(hit.object.matrixWorld).normalize();
   return n;
 }
+/* Cmd (ou Ctrl) maintenu : le clic gauche translate la vue, en mode Placer
+   comme en mode Naviguer — on n'a plus à changer de mode pour recadrer.
+   OrbitControls s'en charge déjà : avec le bouton gauche réglé sur la
+   rotation, il bascule de lui-même en translation quand la touche est
+   enfoncée. Il suffit donc que le mode Placer laisse passer le clic au lieu
+   de poser un motif. */
+let panMod=false;
+function majPanMod(actif){
+  if(panMod===actif) return;
+  panMod=actif;
+  if(!drag) canvas.style.cursor = actif ? 'grab' : (mode==='place' ? 'crosshair' : '');
+}
+addEventListener('keydown', e=>{ if(e.key==='Meta'||e.key==='Control') majPanMod(true); });
+addEventListener('keyup',   e=>{ if(e.key==='Meta'||e.key==='Control') majPanMod(false); });
+addEventListener('blur', ()=>majPanMod(false));
+
 canvas.addEventListener('pointerdown', e=>{
   if(e.button!==0) return;
   if(tcontrol.dragging) return;
+  // La touche est enfoncée : on laisse la vue se translater, sans rien poser
+  // ni saisir. Le raccourci reste valable si l'appui a précédé l'entrée dans
+  // la fenêtre, d'où la relecture du modificateur sur l'évènement lui-même.
+  if(e.metaKey || e.ctrlKey){ majPanMod(true); return; }
   setPtr(e);
   // Naviguer : la scène se manipule, on ne touche pas aux calques.
   if(mode!=='place') return;
@@ -4880,6 +4901,7 @@ canvas.addEventListener('pointerdown', e=>{
 });
 canvas.addEventListener('pointermove', e=>{
   if(!drag){
+    if(panMod || e.metaKey || e.ctrlKey){ majPanMod(true); canvas.style.cursor='grab'; return; }
     if(mode==='place'){
       setPtr(e);
       const hd=hitDecal();

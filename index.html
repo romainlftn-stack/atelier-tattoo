@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Atelier Tattoo 3D</title>
+<!-- Favicon : la marque du logo, un cercle et son point, dessinée en SVG
+     directement dans la page — pas de fichier à servir ni à mettre en cache. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c0d10'/%3E%3Ccircle cx='16' cy='16' r='9.4' fill='none' stroke='%235b7cfa' stroke-width='2.4'/%3E%3Ccircle cx='16' cy='16' r='3.6' fill='%235b7cfa'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230c0d10'/%3E%3Ccircle cx='90' cy='90' r='53' fill='none' stroke='%235b7cfa' stroke-width='13'/%3E%3Ccircle cx='90' cy='90' r='20' fill='%235b7cfa'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#0c0d10">
 <style>
 :root{
   --bg:#0c0d10; --panel:#15171c; --panel2:#1b1e25; --line:#282c36;
@@ -627,7 +632,7 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
           <div id="dimVal">—</div>
           <div id="dimSub">largeur × hauteur sur la peau</div>
         </div>
-        <div class="row"><label>Taille</label><input type="range" id="tSize" min="1" max="60" value="12" step="0.2"><span class="num" id="vtSize">12</span></div>
+        <div class="row"><label>Taille</label><input type="range" id="tSize" min="1" max="95" value="12" step="0.2"><span class="num" id="vtSize">12</span></div>
         <div class="row"><label>Rotation</label><input type="range" id="tRot" min="-180" max="180" value="0" step="1"><span class="num" id="vtRot">0°</span></div>
         <div class="row"><label>Enfoncement</label><input type="range" id="tDepth" min="2" max="40" value="8" step="0.5"><span class="num" id="vtDepth">8</span></div>
         <div class="row"><label>Étirement</label><input type="range" id="tAspect" min="50" max="200" value="100" step="1"><span class="num" id="vtAspect">100</span></div>
@@ -4061,7 +4066,7 @@ function localProxy(bm, worldCenter, radius){
    L'axe vient du squelette et non d'un ajustement géométrique : c'est exact,
    immédiat, et cela réserve d'office le procédé aux membres — le tronc et la
    tête ne sont pas des cylindres et le motif s'y étalerait n'importe comment. */
-function axeMembre(p, region){
+function axeMembre(p, region, hauteur){
   // Le point doit être sur un membre : la région déjà calculée pour le calque
   // le dit mieux qu'une distance. Un point de poitrine se trouve à 19 cm de
   // l'os du bras — assez près pour tromper un simple seuil, et le motif
@@ -4084,7 +4089,31 @@ function axeMembre(p, region){
   // Le rayon d'un membre ne dépasse guère 45 % de la longueur de son os :
   // au-delà, on est à côté du membre, pas dessus.
   if(!best || best.d<1e-4 || best.d>best.L*0.45) return null;
-  return {axe:best.axe, ptAxe:best.proj, rho:best.d, seg:best.id};
+  /* L'os donne la direction, pas le centre : il n'est pas au milieu de la
+     chair, et sur le bras isolé il est franchement excentré — le tour du
+     membre s'en trouvait annoncé à 60 cm au lieu de 32. On recale donc l'axe
+     sur la section réelle du membre autour du point, et on en tire le rayon. */
+  const A=best.axe;
+  const c=new THREE.Vector3(), v=new THREE.Vector3(), d=new THREE.Vector3();
+  const hz=Math.max(hauteur||0, 0.03)*0.5, rMax=best.L*0.5;
+  const pl=[];
+  bodyMeshes.forEach(m=>{
+    m.updateMatrixWorld(true);
+    const pos=m.geometry.attributes.position;
+    const pas=pos.count>30000?3:1;
+    for(let i=0;i<pos.count;i+=pas){
+      v.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);
+      d.subVectors(v,p);
+      const z=d.dot(A);
+      if(Math.abs(z)>hz || d.lengthSq()>rMax*rMax) continue;
+      pl.push(v.clone().addScaledVector(A,-z));      // rabattu dans le plan du point
+    }
+  });
+  if(pl.length<12) return {axe:A, ptAxe:best.proj, rho:best.d, seg:best.id};
+  pl.forEach(q=>c.add(q)); c.multiplyScalar(1/pl.length);
+  let r=0; pl.forEach(q=>r+=q.distanceTo(c)); r/=pl.length;
+  if(!(r>1e-4) || r>best.L*0.5) return {axe:A, ptAxe:best.proj, rho:best.d, seg:best.id};
+  return {axe:A, ptAxe:c, rho:r, seg:best.id};
 }
 
 /** Découpe un polygone (sommets {p,n,u,v}) par une demi-droite en UV. */
@@ -4112,7 +4141,7 @@ function decalEnroule(bm, l, w, h, rot){
   if(!geo.attributes.normal) geo.computeVertexNormals();
   const nor=geo.attributes.normal;
   const P=new THREE.Vector3(l.pos.x,l.pos.y,l.pos.z);
-  const rep=axeMembre(P, l.region);
+  const rep=axeMembre(P, l.region, h);
   if(!rep) return null;
   const A=rep.axe.clone(), ptAxe=rep.ptAxe, rho=rep.rho;
   // Un axe d'os a un sens arbitraire (épaule→coude ou l'inverse) : on
@@ -4325,12 +4354,26 @@ function decalSurPeau(bm, l, w, h, rot){
     const dx=PX[i]-Px, dy=PY[i]-Py, dz=PZ[i]-Pz;
     return Math.sqrt(dx*dx+dy*dy+dz*dz) <= du*1.12 + 0.006;
   };
+  /* Second garde-fou, local celui-là. Chaque sommet n'est mis à plat qu'une
+     fois, par le premier chemin qui l'atteint ; quand le front de progression
+     fait le tour du membre et se rejoint à l'arrière, les triangles de
+     raccord héritent de deux placements incompatibles et se retrouvent
+     écrasés — le motif s'y étirait. Un triangle correctement déplié garde
+     ses longueurs d'arête : on vérifie, et on s'arrête là où ce n'est plus
+     vrai plutôt que d'y étaler le dessin. */
+  const memeLongueur=(i,j)=>{
+    const du=Math.hypot(U[i]-U[j], V[i]-V[j]);
+    const dx=PX[i]-PX[j], dy=PY[i]-PY[j], dz=PZ[i]-PZ[j];
+    const d3=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    return Math.abs(du-d3) <= d3*0.10 + 1e-5;
+  };
   while(fq<fw){
     const ti=file[fq++];
     const t0=TA[ti*3], t1=TA[ti*3+1], t2=TA[ti*3+2];
     const u0=U[t0],u1=U[t1],u2=U[t2], v0=V[t0],v1=V[t1],v2=V[t2];
     if(u0!==u0 || u1!==u1 || u2!==u2) continue;
     if(!coherent(t0)||!coherent(t1)||!coherent(t2)) continue;
+    if(!memeLongueur(t0,t1)||!memeLongueur(t1,t2)||!memeLongueur(t2,t0)) continue;
     // Hors du cadre : on ne le garde pas et on ne propage pas au-delà — le
     // cadre étant convexe, rien d'utile ne se trouve derrière.
     if((u0<-dw&&u1<-dw&&u2<-dw)||(u0>dw&&u1>dw&&u2>dw)) continue;
@@ -4449,23 +4492,35 @@ function rebuildDecal(l){
   // extrait du corps doit la contenir entièrement, sinon le décalque
   // s'arrête sur une frontière de cellule — encore une coupe droite.
   const radius=0.5*Math.hypot(w,h,dp)*1.15;
-  bodyMeshes.forEach(bm=>{
+  const candidats=bodyMeshes.filter(bm=>{
     if(!bm.geometry.boundingSphere) bm.geometry.computeBoundingSphere();
     const bs=bm.geometry.boundingSphere.clone().applyMatrix4(bm.matrixWorld);
-    if(bs.center.distanceTo(l.pos) > bs.radius+radius) return;
-    let g;
+    return bs.center.distanceTo(l.pos) <= bs.radius+radius;
+  });
+  const ang=(l.rot||0)*Math.PI/180;
+  /* Le dépliage de la peau d'abord, sur tous les morceaux concernés. La
+     projection en boîte ne sert que si aucun n'a rien donné : sinon elle
+     repeignait un exemplaire déformé du motif sur le maillage voisin — le
+     bras de Femme récupérait ainsi une copie étirée d'un dessin posé sur
+     l'épaule. Quand le dépliage ne rend rien pour un morceau, c'est qu'il
+     n'en porte réellement aucune part. */
+  const construire=(bm, filet)=>{
+    let g=null, methode='peau';
     try{
-      const ang=(l.rot||0)*Math.PI/180;
-      if(l.wrap) g=decalEnroule(bm, l, w, h, ang);
-      // Dépliage de la peau : c'est le procédé par défaut, celui qui ne coupe
-      // jamais. L'enroulement cylindrique reste pour fermer exactement un
-      // bracelet, et la projection en boîte sert d'ultime filet.
+      if(l.wrap){ g=decalEnroule(bm, l, w, h, ang); if(g) methode='enroule'; }
       if(!g) g=decalSurPeau(bm, l, w, h, ang);
-      if(!g){
+      if(!g && filet){
         const src = localProxy(bm, l.pos, radius) || bm;
         g=couperDos(new DecalGeometry(src, l.pos, e, size), axeProj);
+        methode='boite';
       }
-    }catch(err){ return; }
+    }catch(err){ return null; }
+    if(g) g.userData.methode=methode;
+    return g;
+  };
+  let filet=false;
+  const poser=(bm)=>{
+    const g=construire(bm, filet);
     if(!g) return;
     if(!g.attributes.position || g.attributes.position.count<3){ g.dispose(); return; }
     // Sur un corps animé, la décalcomanie doit être skinnée comme la peau,
@@ -4487,7 +4542,9 @@ function rebuildDecal(l){
       m.castShadow=false; m.receiveShadow=true;
       decalG.add(m); l.meshes.push(m);
     }
-  });
+  };
+  candidats.forEach(poser);
+  if(!l.meshes.length){ filet=true; candidats.forEach(poser); }
   if(selLayer>=0 && layers[selLayer]===l) placeSelRing(l);
   // Sans cela la scène ne se redessine pas : le changement d'encre
   // (Noir / Blanc / Origine) était bien appliqué au premier clic mais
@@ -4532,6 +4589,7 @@ function addLayer(flashId, pos, normal, mesh){
   l.norm = versNorm(l.canon, familleModele());
   l.anc  = ancrerSurSquelette(pos, normal);
   l.region = regionOf(depuisNorm(l.norm,'anat'));
+  majEnroulementAuto(l);
   layers.push(l);
   refreshLayerMaterial(l);
   selLayer=layers.length-1;
@@ -4673,10 +4731,22 @@ function majSegProjection(l){
   seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (+b.dataset.w)===(l&&l.wrap?1:0)));
   $('rowTour').style.display = (l && l.wrap) ? '' : 'none';
 }
+/** Un motif presque aussi large que le membre ne peut pas tenir à plat :
+ *  déplié, il se brise à la jonction, à l'arrière. On l'enroule alors de
+ *  lui-même — à la pose comme au changement de taille. Dès que l'on touche
+ *  au réglage Projection, ce choix devient manuel et l'on n'y revient plus. */
+function majEnroulementAuto(l){
+  if(!l || l.wrapManuel) return;
+  try{
+    const tour=circonferenceMembre(l);
+    l.wrap = (tour && l.size >= tour*0.70) ? 1 : 0;
+  }catch(e){}
+}
 /** Circonférence du membre sous le calque, en centimètres. */
 function circonferenceMembre(l){
   let rep=null;
-  try{ rep=axeMembre(new THREE.Vector3(l.pos.x,l.pos.y,l.pos.z), l.region); }catch(e){}
+  const hh=(l.size/100)/(l.imgAspect||1)*(l.aspect/100);
+  try{ rep=axeMembre(new THREE.Vector3(l.pos.x,l.pos.y,l.pos.z), l.region, hh); }catch(e){}
   return rep ? 2*Math.PI*rep.rho*100 : null;
 }
 function editLayer(fn, heavy){
@@ -4701,7 +4771,7 @@ function serializeLayers(){
     nm:l.norm?l.norm.toArray():null, anc:l.anc||null,
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked,
-    visible:l.visible, wrap:l.wrap||0}));
+    visible:l.visible, wrap:l.wrap||0, wrapManuel:l.wrapManuel||0}));
 }
 function restoreLayers(arr){
   histLock=true;
@@ -5356,7 +5426,8 @@ $('btnCutApply').addEventListener('click',()=>{
    12 cm posé sur un avant-bras, la boîte de projection ne faisait que
    6,6 cm de fond et tranchait le dessin. Les faces opposées étant désormais
    écartées (couperDos), on peut viser large sans déborder de l'autre côté. */
-bind('tSize',   v=>editLayer(l=>{ l.size=v; if(!l.depthLock){ l.depth=clamp(v*1.25,4,40); setCtl('tDepth',l.depth); } }), v=>v.toFixed(1));
+bind('tSize',   v=>editLayer(l=>{ l.size=v; if(!l.depthLock){ l.depth=clamp(v*1.25,4,40); setCtl('tDepth',l.depth); }
+                                  majEnroulementAuto(l); majSegProjection(l); }), v=>v.toFixed(1));
 bind('tRot',    v=>editLayer(l=>l.rot=v),     v=>Math.round(v)+'°');
 bind('tDepth',  v=>editLayer(l=>{ l.depth=v; l.depthLock=true; }), v=>v.toFixed(1));
 bind('tAspect', v=>editLayer(l=>l.aspect=v));
@@ -5367,7 +5438,7 @@ bind('tRelief', v=>editLayer(l=>l.relief=v,true));
 $('tInk').addEventListener('input',e=>editLayer(l=>l.ink=e.target.value,true));
 $('tWrap').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b || b.disabled) return;
-  editLayer(l=>{ l.wrap=+b.dataset.w; });
+  editLayer(l=>{ l.wrap=+b.dataset.w; l.wrapManuel=1; });
   majSegProjection(layers[selLayer]);
   pushHistory();
 });
@@ -5375,7 +5446,7 @@ $('tTour').addEventListener('click',()=>{
   const l=layers[selLayer]; if(!l) return;
   const c=circonferenceMembre(l);
   if(!c){ toast('Cette zone n\'est pas assez cylindrique pour en faire le tour', true); return; }
-  editLayer(x=>{ x.size=clamp(c,1,60); if(!x.depthLock) x.depth=clamp(x.size*1.25,4,40); });
+  editLayer(x=>{ x.size=clamp(c,1,95); if(!x.depthLock) x.depth=clamp(x.size*1.25,4,40); });
   setCtl('tSize',layers[selLayer].size); setCtl('tDepth',layers[selLayer].depth);
   pushHistory();
   toast('Largeur réglée sur '+c.toFixed(1)+' cm — le tour du membre');

@@ -297,7 +297,11 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 .dossier-calques .cnt{background:var(--sunk);border-radius:9px;padding:1px 7px;font-size:10.5px;color:var(--txt3)}
 .dossier-calques .ic{opacity:.75;font-size:12px}
 .dossier-calques .ic:hover{opacity:1}
-.dossier-corps{border-left:2px solid var(--line);margin-left:8px;padding-left:6px}
+.dossier-corps{border-left:2px solid var(--line);margin-left:8px;padding-left:6px;min-height:10px}
+.layer.glisse{opacity:.45}
+body.glisse-calque{cursor:grabbing;user-select:none}
+body.glisse-calque .layer{pointer-events:none}
+.dossier-calques.cible,.dossier-corps.cible{outline:2px dashed var(--acc);outline-offset:1px;border-radius:7px}
 .layer.dans-dossier{margin-left:0}
 #dossierConfigs{margin-top:8px}
 #configsToggle{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txt2);
@@ -649,20 +653,10 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
         <div class="row"><label>Rotation</label><input type="range" id="tRot" min="-180" max="180" value="0" step="1"><span class="num" id="vtRot">0°</span></div>
         <div class="row"><label>Enfoncement</label><input type="range" id="tDepth" min="2" max="40" value="8" step="0.5"><span class="num" id="vtDepth">8</span></div>
         <div class="row"><label>Étirement</label><input type="range" id="tAspect" min="50" max="200" value="100" step="1"><span class="num" id="vtAspect">100</span></div>
-        <!-- Un motif plus large que le membre ne tient pas sur une projection
-             à plat : au-delà de la silhouette il n'y a plus de peau face au
-             projecteur. « Enroulée » projette en coordonnées cylindriques et
-             fait le tour du bras — c'est aussi ce qu'il faut pour un
-             bracelet. -->
-        <div class="row"><label>Projection</label>
-          <div class="seg" id="tWrap">
-            <button data-w="0" class="on">À plat</button>
-            <button data-w="1">Enroulée</button>
-          </div>
-        </div>
-        <div class="row wide" id="rowTour" style="display:none">
-          <button class="tb" id="tTour" title="Règle la largeur sur la circonférence du membre : le motif se referme exactement">Ajuster au tour du membre</button>
-        </div>
+        <!-- La projection n'est plus un réglage : un motif qui approche le
+             tour du membre s'enroule de lui-même, sinon il se briserait à la
+             jonction. Deux boutons de plus ne faisaient qu'exposer une
+             mécanique interne, sans rien apporter à qui pose un tatouage. -->
         <div class="sep"></div>
         <div class="row"><label>Opacité</label><input type="range" id="tOpacity" min="5" max="100" value="92"><span class="num" id="vtOpacity">92</span></div>
         <div class="row"><label>Cicatrisation</label><input type="range" id="tHealed" min="0" max="100" value="18"><span class="num" id="vtHealed">18</span></div>
@@ -4113,8 +4107,13 @@ function axeMembre(p, region, hauteur){
      membre s'en trouvait annoncé à 60 cm au lieu de 32. On recale donc l'axe
      sur la section réelle du membre autour du point, et on en tire le rayon. */
   const A=best.axe;
-  const c=new THREE.Vector3(), v=new THREE.Vector3(), d=new THREE.Vector3();
-  const hz=Math.max(hauteur||0, 0.03)*0.5, rMax=best.L*0.5;
+  const v=new THREE.Vector3(), d=new THREE.Vector3();
+  const hz=Math.max(hauteur||0, 0.03)*0.5;
+  /* Rayon de collecte calé sur l'épaisseur du membre sous le point, et non
+     sur la longueur de l'os : un demi-fémur ratisse jusqu'à l'autre jambe,
+     et le tour du mollet s'en trouvait annoncé bien trop grand — l'enroulement
+     automatique ne se déclenchait donc jamais et la bande se brisait. */
+  let rMax=best.d*2.4;
   const pl=[];
   bodyMeshes.forEach(m=>{
     m.updateMatrixWorld(true);
@@ -4124,14 +4123,25 @@ function axeMembre(p, region, hauteur){
       v.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);
       d.subVectors(v,p);
       const z=d.dot(A);
-      if(Math.abs(z)>hz || d.lengthSq()>rMax*rMax) continue;
+      if(Math.abs(z)>hz) continue;
+      d.addScaledVector(A,-z);
+      if(d.lengthSq()>rMax*rMax) continue;
       pl.push(v.clone().addScaledVector(A,-z));      // rabattu dans le plan du point
     }
   });
   if(pl.length<12) return {axe:A, ptAxe:best.proj, rho:best.d, seg:best.id};
-  pl.forEach(q=>c.add(q)); c.multiplyScalar(1/pl.length);
-  let r=0; pl.forEach(q=>r+=q.distanceTo(c)); r/=pl.length;
-  if(!(r>1e-4) || r>best.L*0.5) return {axe:A, ptAxe:best.proj, rho:best.d, seg:best.id};
+  // Deux passes : le centre trouvé au premier tour resserre la sélection.
+  const c=new THREE.Vector3();
+  let garde=pl, r=0;
+  for(let passe=0; passe<2; passe++){
+    c.set(0,0,0); garde.forEach(q=>c.add(q)); c.multiplyScalar(1/garde.length);
+    r=0; garde.forEach(q=>r+=q.distanceTo(c)); r/=garde.length;
+    if(passe===0){
+      const suite=garde.filter(q=>q.distanceTo(c)<r*1.6);
+      if(suite.length>=12) garde=suite;
+    }
+  }
+  if(!(r>1e-4) || r>best.L*0.6) return {axe:A, ptAxe:best.proj, rho:best.d, seg:best.id};
   return {axe:A, ptAxe:c, rho:r, seg:best.id};
 }
 
@@ -4608,6 +4618,7 @@ function addLayer(flashId, pos, normal, mesh){
   l.norm = versNorm(l.canon, familleModele());
   l.anc  = ancrerSurSquelette(pos, normal);
   l.region = regionOf(depuisNorm(l.norm,'anat'));
+  try{ l.ampleur=ampleurLocale(l); }catch(e){}
   majEnroulementAuto(l);
   layers.push(l);
   refreshLayerMaterial(l);
@@ -4649,17 +4660,64 @@ function mirrorLayer(l){
 /* Dossiers repliés : un par configuration chargée. On retient l'état par nom
    pour qu'un redessin de la liste ne rouvre pas ce que l'on venait de fermer. */
 const dossiersReplies=new Set();
+/** Range un calque dans un dossier de configuration, ou l'en sort.
+ *  Les calques d'un même dossier doivent rester contigus : la liste les
+ *  regroupe à la volée en parcourant l'ordre des calques. */
+async function rangerCalque(l, nom, id){
+  const ancien=l.dossier||null, ancienId=l.dossierId||null;
+  if((ancien||null)===(nom||null)) return;
+  l.dossier=nom||null;
+  l.dossierId=nom ? (id||null) : null;
+  const i=layers.indexOf(l); if(i<0) return;
+  layers.splice(i,1);
+  let pos=layers.length;
+  if(nom){ let dernier=-1; layers.forEach((x,k)=>{ if(x.dossier===nom) dernier=k; });
+           if(dernier>=0) pos=dernier+1; }
+  layers.splice(pos,0,l);
+  selLayer=layers.indexOf(l); selIds=new Set([l.id]);
+  renderLayers(); loadLayerEditor(); pushHistory(); markDirty();
+  // La configuration d'origine et celle d'arrivée sont réécrites : le calque
+  // appartient vraiment au dossier où on l'a posé, il y sera au rechargement.
+  if(ancien && ancienId) await enregistrerDossier(ancien, ancienId);
+  if(nom){
+    const ok = await enregistrerDossier(nom, l.dossierId);
+    toast(ok ? '« '+l.name+' » ajouté à « '+nom+' »'
+             : '« '+l.name+' » rangé dans « '+nom+' » (non enregistré)');
+  } else toast('« '+l.name+' » sorti du dossier');
+}
+/* Glisser un calque d'un dossier à l'autre. On suit le pointeur plutôt que
+   d'utiliser le glisser-déposer HTML, qui ne fonctionne pas au doigt. */
+let glisse=null, glisseFaite=false;
+function cibleDossier(x,y){
+  const el=document.elementFromPoint(x,y);
+  if(!el) return undefined;
+  const d=el.closest('.dossier-calques, .dossier-corps');
+  if(d) return {nom:d.dataset.dossier, id:d.dataset.dossierId||null, el:d};
+  const dansUneLigne=el.closest('.layer');
+  if(dansUneLigne){
+    const p=dansUneLigne.closest('.dossier-corps');
+    if(p) return {nom:p.dataset.dossier, id:p.dataset.dossierId||null, el:p};
+  }
+  return el.closest('#layerList') ? {nom:null, id:null, el:null} : undefined;
+}
+function surlignerCible(c){
+  $$('.dossier-calques.cible, .dossier-corps.cible').forEach(e=>e.classList.remove('cible'));
+  if(c && c.el) c.el.classList.add('cible');
+}
 function ligneCalque(l, i){
   const f=flashes.find(x=>x.id===l.flash);
   const d=document.createElement('div');
   const sel = selIds.size ? selIds.has(l.id) : (i===selLayer);
   d.className='layer'+(sel?' on':'')+(i===selLayer&&selIds.size>1?' principal':'')+(l.dossier?' dans-dossier':'');
+  d.dataset.id=l.id;
   d.innerHTML=`<img class="th" src="${f?f.thumb:''}">
     <span class="nm">${l.name}</span>
     <span class="ic${l.flipH?'':' off'}" data-a="m" title="Miroir horizontal">⇄</span>
     <span class="ic${l.visible?'':' off'}" data-a="v" title="${l.visible?'Masquer':'Afficher'}">${l.visible?'👁':'✕'}</span>
     <span class="ic${l.locked?'':' off'}" data-a="l" title="${l.locked?'Déverrouiller':'Verrouiller'}">${l.locked?'🔒':'🔓'}</span>`;
   d.addEventListener('click',e=>{
+    // un glissé vient de se terminer : ce clic n'en est pas un
+    if(glisseFaite){ glisseFaite=false; return; }
     const a=e.target.dataset.a;
     if(a==='v'){ l.visible=!l.visible; rebuildDecal(l); renderLayers(); return; }
     if(a==='l'){ l.locked=!l.locked; renderLayers(); return; }
@@ -4683,6 +4741,9 @@ function renderLayers(){
         const replie=dossiersReplies.has(dos);
         const tete=document.createElement('div');
         tete.className='dossier-calques'+(replie?'':' ouvert');
+        tete.dataset.dossier=dos;
+        const idDos=(layers.find(x=>x.dossier===dos)||{}).dossierId||'';
+        tete.dataset.dossierId=idDos;
         tete.innerHTML='<span class="chev">▶</span><span class="nm">'+dos.replace(/</g,'&lt;')+'</span><span class="cnt">'+n+'</span>'+
                        '<span class="ic" data-a="v" title="Afficher ou masquer tout le dossier">👁</span>';
         tete.addEventListener('click',e=>{
@@ -4698,6 +4759,8 @@ function renderLayers(){
         box.appendChild(tete);
         corps=document.createElement('div');
         corps.className='dossier-corps';
+        corps.dataset.dossier=dos;
+        corps.dataset.dossierId=idDos;
         if(replie) corps.style.display='none';
         box.appendChild(corps);
       }
@@ -4763,37 +4826,65 @@ function loadLayerEditor(){
   setCtl('tOpacity',l.opacity); setCtl('tHealed',l.healed); setCtl('tFresh',l.fresh); setCtl('tRelief',l.relief);
   $('tInk').value=l.ink; $('tAlign').value=l.align;
   $('tFlipH').checked=l.flipH; $('tLockSel').checked=l.locked;
-  majSegProjection(l);
   updateLayerInfo();
 }
-function majSegProjection(l){
-  const seg=$('tWrap'); if(!seg) return;
-  // L'enroulement n'a de sens que sur un membre : ailleurs le bouton reste
-  // visible mais inerte, avec l'explication en infobulle, plutôt que de
-  // laisser croire à une panne.
-  const possible = !!l && circonferenceMembre(l)!=null;
-  const bEnr=seg.querySelector('button[data-w="1"]');
-  if(bEnr){
-    bEnr.disabled=!possible;
-    bEnr.title = possible ? 'Projette le motif autour du membre : il fait le tour sans être coupé'
-                          : 'Disponible sur un bras ou une jambe — ailleurs il n\'y a pas d\'axe à suivre';
-  }
-  // On ne remet jamais le calque à plat de force : au changement de modèle
-  // les os ne sont pas encore en place, et effacer l'intention perdait le
-  // réglage. Faute d'axe, decalEnroule retombe de lui-même sur le à-plat.
-  seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (+b.dataset.w)===(l&&l.wrap?1:0)));
-  $('rowTour').style.display = (l && l.wrap) ? '' : 'none';
-}
+
 /** Un motif presque aussi large que le membre ne peut pas tenir à plat :
  *  déplié, il se brise à la jonction, à l'arrière. On l'enroule alors de
  *  lui-même — à la pose comme au changement de taille. Dès que l'on touche
  *  au réglage Projection, ce choix devient manuel et l'on n'y revient plus. */
 function majEnroulementAuto(l){
-  if(!l || l.wrapManuel) return;
+  if(!l) return;
   try{
     const tour=circonferenceMembre(l);
-    l.wrap = (tour && l.size >= tour*0.70) ? 1 : 0;
+    /* Le dépliage suit la morphologie au millimètre — mesuré : distorsion
+       médiane 1,01 et jamais plus de 1,04. L'enroulement cylindrique, lui,
+       suppose une section circulaire et déforme dès que le membre s'écarte
+       du cylindre : genou, coude, cheville. On ne l'emploie donc que pour ce
+       que le dépliage ne sait pas faire — refermer un motif qui fait le tour
+       complet. En deçà, le dépliage s'arrête proprement. */
+    l.wrap = (tour && l.size >= tour*0.85) ? 1 : 0;
   }catch(e){}
+}
+/* Report d'un corps à l'autre : garder la taille en centimètres donne un
+   motif juste sur Homme et minuscule sur Super, dont le corps est bien plus
+   massif à stature égale. On mesure donc l'ampleur du corps à l'endroit du
+   calque et on transpose la taille dans le même rapport. Sur un membre c'est
+   son tour ; ailleurs, l'épaisseur du corps à cette hauteur — de face en dos,
+   et non de gauche à droite : Femme est livrée bras écartés et sa largeur au
+   niveau de la poitrine mesurait l'envergure, pas le buste. */
+let _profilLargeur=null, _profilCle='';
+function profilLargeur(){
+  const cle=modelKind+'|'+(corpsActif||'')+'|'+bodyMeshes.length;
+  if(_profilLargeur && _profilCle===cle) return _profilLargeur;
+  const N=48, b=new THREE.Box3(), v=new THREE.Vector3();
+  bodyMeshes.forEach(m=>{ m.updateMatrixWorld(true); const p=m.geometry.attributes.position;
+    const pas=p.count>30000?4:1;
+    for(let i=0;i<p.count;i+=pas){ v.fromBufferAttribute(p,i).applyMatrix4(m.matrixWorld); b.expandByPoint(v); } });
+  const y0=b.min.y, H=Math.max(b.max.y-b.min.y,1e-4);
+  const mn=new Float64Array(N).fill(1e9), mx=new Float64Array(N).fill(-1e9);
+  bodyMeshes.forEach(m=>{ const p=m.geometry.attributes.position;
+    const pas=p.count>30000?4:1;
+    for(let i=0;i<p.count;i+=pas){ v.fromBufferAttribute(p,i).applyMatrix4(m.matrixWorld);
+      const k=clamp(Math.floor((v.y-y0)/H*N),0,N-1);
+      if(v.z<mn[k]) mn[k]=v.z; if(v.z>mx[k]) mx[k]=v.z; } });
+  _profilLargeur={y0,H,N,mn,mx}; _profilCle=cle;
+  return _profilLargeur;
+}
+function epaisseurLocale(pos){
+  const pr=profilLargeur();
+  const k=clamp(Math.floor((pos.y-pr.y0)/pr.H*pr.N),0,pr.N-1);
+  let l=0, n=0;
+  for(let j=Math.max(0,k-1);j<=Math.min(pr.N-1,k+1);j++){
+    if(pr.mx[j]>-1e8){ l+=pr.mx[j]-pr.mn[j]; n++; }
+  }
+  return n ? l/n*100 : null;                 // en centimètres
+}
+/** Ampleur du corps à l'endroit du calque, en centimètres. */
+function ampleurLocale(l){
+  const tour=circonferenceMembre(l);
+  if(tour) return tour;
+  return epaisseurLocale(l.pos);
 }
 /** Circonférence du membre sous le calque, en centimètres. */
 function circonferenceMembre(l){
@@ -4824,9 +4915,10 @@ function serializeLayers(){
     nm:l.norm?l.norm.toArray():null, anc:l.anc||null,
     size:l.size, rot:l.rot, depth:l.depth, aspect:l.aspect, opacity:l.opacity, healed:l.healed,
     fresh:l.fresh, relief:l.relief, ink:l.ink, align:l.align, flipH:l.flipH, locked:l.locked,
-    visible:l.visible, wrap:l.wrap||0, wrapManuel:l.wrapManuel||0, dossier:l.dossier||null}));
+    visible:l.visible, wrap:l.wrap||0, ampleur:l.ampleur||null,
+    dossier:l.dossier||null, dossierId:l.dossierId||null}));
 }
-function restoreLayers(arr, dossier){
+function restoreLayers(arr, dossier, dossierId){
   histLock=true;
   layers.slice().forEach(l=>deleteLayer(l,true));
   layers=[];
@@ -4838,7 +4930,7 @@ function restoreLayers(arr, dossier){
       norm:s.nm?new THREE.Vector3().fromArray(s.nm):null, anc:s.anc||null,
       meshes:[], tex:null, bump:null, mat:null, mesh:null});
     delete l.p; delete l.n; delete l.cp; delete l.cn; delete l.rg; delete l.nm;
-    if(dossier) l.dossier=dossier;
+    if(dossier){ l.dossier=dossier; l.dossierId=dossierId||null; }
     layers.push(l); refreshLayerMaterial(l);
   });
   selLayer=Math.min(selLayer, layers.length-1);
@@ -5333,6 +5425,21 @@ function resnapLayers(){
     }
     if(!pose) l.offView=true;
     if(!l.offView){
+      // Le motif garde sa part du corps plutôt que ses centimètres : douze
+      // centimètres sur Homme en font dix-sept sur Super, dont le torse est
+      // d'autant plus large.
+      try{
+        const a=ampleurLocale(l);
+        if(a && l.ampleur){
+          const k=clamp(a/l.ampleur, 0.45, 2.6);
+          if(Math.abs(k-1)>0.02){
+            l.size=clamp(l.size*k, 1, 95);
+            if(!l.depthLock) l.depth=clamp(l.size*1.25,4,40);
+          }
+        }
+        if(a) l.ampleur=a;
+      }catch(e){}
+      majEnroulementAuto(l);
       l.canon  = l.pos.clone().applyMatrix4(anatXformInv);
       l.canonN = l.normal.clone();
       // On ne réécrit pas l.norm : elle reste l'ancrage anatomique d'origine,
@@ -5340,6 +5447,8 @@ function resnapLayers(){
     }
     rebuildDecal(l);
   });
+  // La taille a pu être transposée : le panneau et la pastille doivent suivre.
+  loadLayerEditor();
   if(layers[selLayer]) placeSelRing(layers[selLayer]);
 }
 const LEGACY_KIND={bras:'arm', jambe:'male', corps:'male'};
@@ -5503,7 +5612,7 @@ $('btnCutApply').addEventListener('click',()=>{
    6,6 cm de fond et tranchait le dessin. Les faces opposées étant désormais
    écartées (couperDos), on peut viser large sans déborder de l'autre côté. */
 bind('tSize',   v=>editLayer(l=>{ l.size=v; if(!l.depthLock){ l.depth=clamp(v*1.25,4,40); setCtl('tDepth',l.depth); }
-                                  majEnroulementAuto(l); majSegProjection(l); }), v=>v.toFixed(1));
+                                  majEnroulementAuto(l); }), v=>v.toFixed(1));
 bind('tRot',    v=>editLayer(l=>l.rot=v),     v=>Math.round(v)+'°');
 bind('tDepth',  v=>editLayer(l=>{ l.depth=v; l.depthLock=true; }), v=>v.toFixed(1));
 bind('tAspect', v=>editLayer(l=>l.aspect=v));
@@ -5512,21 +5621,6 @@ bind('tHealed', v=>editLayer(l=>l.healed=v,true));
 bind('tFresh',  v=>editLayer(l=>l.fresh=v,true));
 bind('tRelief', v=>editLayer(l=>l.relief=v,true));
 $('tInk').addEventListener('input',e=>editLayer(l=>l.ink=e.target.value,true));
-$('tWrap').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b || b.disabled) return;
-  editLayer(l=>{ l.wrap=+b.dataset.w; l.wrapManuel=1; });
-  majSegProjection(layers[selLayer]);
-  pushHistory();
-});
-$('tTour').addEventListener('click',()=>{
-  const l=layers[selLayer]; if(!l) return;
-  const c=circonferenceMembre(l);
-  if(!c){ toast('Cette zone n\'est pas assez cylindrique pour en faire le tour', true); return; }
-  editLayer(x=>{ x.size=clamp(c,1,95); if(!x.depthLock) x.depth=clamp(x.size*1.25,4,40); });
-  setCtl('tSize',layers[selLayer].size); setCtl('tDepth',layers[selLayer].depth);
-  pushHistory();
-  toast('Largeur réglée sur '+c.toFixed(1)+' cm — le tour du membre');
-});
 $('tAlign').addEventListener('change',e=>editLayer(l=>l.align=e.target.value));
 $('tFlipH').addEventListener('change',e=>editLayer(l=>l.flipH=e.target.checked,true));
 $('tLockSel').addEventListener('change',e=>editLayer(l=>l.locked=e.target.checked));
@@ -5855,13 +5949,25 @@ function ouvrirPrompt(titre, valeur, onValider, motDePasse){
 }
 $('btnPromptFermer').addEventListener('click',()=>$('promptModal').classList.remove('show'));
 $('promptModal').addEventListener('click',e=>{ if(e.target.id==='promptModal') $('promptModal').classList.remove('show'); });
+/* Le traitement peut partir sur le réseau — enregistrer une configuration
+   écrit chez Supabase. Pendant cette attente le bouton restait actif : un
+   second clic, ou Entrée puis clic, lançait une deuxième écriture et la
+   configuration se retrouvait en double. */
+let _promptOccupe=false;
 $('btnPromptValider').addEventListener('click', async ()=>{
-  if(!_promptCb) return;
-  const err = await _promptCb($('promptChamp').value.trim());
-  if(err){ $('promptErreur').textContent=err; return; }
-  $('promptModal').classList.remove('show');
+  if(!_promptCb || _promptOccupe) return;
+  _promptOccupe=true;
+  const b=$('btnPromptValider'); b.disabled=true;
+  try{
+    const err = await _promptCb($('promptChamp').value.trim());
+    if(err){ $('promptErreur').textContent=err; return; }
+    _promptCb=null;
+    $('promptModal').classList.remove('show');
+  } finally { _promptOccupe=false; b.disabled=false; }
 });
-$('promptChamp').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnPromptValider').click(); });
+$('promptChamp').addEventListener('keydown',e=>{
+  if(e.key==='Enter' && !e.repeat) $('btnPromptValider').click();
+});
 
 /* ---- configurations enregistrées : même charge utile que « Sauver » ---- */
 function chargeUtileProjet(){
@@ -5877,15 +5983,38 @@ function chargeUtileProjet(){
     layers:serializeLayers()
   };
 }
+/** Charge utile d'une configuration : le corps et le décor tels quels, mais
+ *  seulement les calques d'un dossier donné et les motifs qu'ils emploient.
+ *  Sans ce tri, ranger un calque dans un dossier y aurait fait entrer toute
+ *  la séance en cours. */
+function chargeUtileConfig(nomDossier){
+  const p=chargeUtileProjet();
+  const gr=layers.filter(l=>l.dossier===nomDossier);
+  const ids=new Set(gr.map(l=>l.flash));
+  p.layers=serializeLayers().filter(x=>x.dossier===nomDossier);
+  p.flashes=p.flashes.filter(f=>ids.has(f.id));
+  return p;
+}
+/** Réécrit la configuration d'un dossier avec les calques qu'il contient. */
+async function enregistrerDossier(nom, id){
+  if(!session || !id) return false;
+  const { error } = await sb.from('configurations').update({ data: chargeUtileConfig(nom) }).eq('id', id);
+  if(error){ toast('Enregistrement impossible : '+error.message, true); return false; }
+  return true;
+}
 $('btnEnregistrerConfig').addEventListener('click',()=>{
   if(!session){ ouvrirAuth('login'); toast('Connectez-vous pour enregistrer une configuration', true); return; }
   if(!layers.length){ toast('Aucun calque à enregistrer', true); return; }
   ouvrirPrompt('Nom de la configuration', '', async (nom)=>{
     if(!nom) return 'Donnez un nom à cette configuration.';
-    const { error } = await sb.from('configurations').insert({
+    const { data, error } = await sb.from('configurations').insert({
       user_id: session.user.id, name: nom, data: chargeUtileProjet()
-    });
+    }).select('id').single();
     if(error) return error.message;
+    // Les calques enregistrés rejoignent aussitôt le dossier de la
+    // configuration : on peut y glisser la suite sans recharger.
+    layers.forEach(l=>{ if(!l.dossier){ l.dossier=nom; l.dossierId=data&&data.id||null; } });
+    renderLayers();
     toast('Configuration « '+nom+' » enregistrée');
     await majDossierConfigs();
     return null;
@@ -5913,7 +6042,7 @@ async function majDossierConfigs(){
     row.querySelector('.nom').addEventListener('click', async ()=>{
       const { data:full, error:err2 } = await sb.from('configurations').select('data').eq('id',c.id).single();
       if(err2){ toast('Chargement impossible', true); return; }
-      await loadProject(full.data, c.name);
+      await loadProject(full.data, c.name, c.id);
       toast('Configuration « '+c.name+' » chargée');
     });
     row.querySelector('.sup').addEventListener('click', async (e)=>{
@@ -5925,6 +6054,33 @@ async function majDossierConfigs(){
     liste.appendChild(row);
   });
 }
+$('layerList').addEventListener('pointerdown', e=>{
+  const row=e.target.closest('.layer');
+  if(!row || e.target.dataset.a || e.button!==0) return;
+  glisse={id:row.dataset.id, x0:e.clientX, y0:e.clientY, row, actif:false};
+});
+addEventListener('pointermove', e=>{
+  if(!glisse) return;
+  if(!glisse.actif){
+    if(Math.hypot(e.clientX-glisse.x0, e.clientY-glisse.y0)<6) return;
+    glisse.actif=true; glisse.row.classList.add('glisse');
+    document.body.classList.add('glisse-calque');
+  }
+  e.preventDefault();
+  surlignerCible(cibleDossier(e.clientX, e.clientY));
+});
+addEventListener('pointerup', async e=>{
+  const g=glisse; glisse=null;
+  if(!g || !g.actif) return;
+  glisseFaite=true;
+  g.row.classList.remove('glisse');
+  document.body.classList.remove('glisse-calque');
+  surlignerCible(null);
+  const c=cibleDossier(e.clientX, e.clientY);
+  if(c===undefined) return;                       // lâché hors de la liste
+  const l=layers.find(x=>x.id===g.id);
+  if(l) await rangerCalque(l, c.nom, c.id);
+});
 $('configsToggle').addEventListener('click',()=>{
   $('configsToggle').classList.toggle('open');
   $('configsList').style.display = $('configsToggle').classList.contains('open') ? '' : 'none';
@@ -5967,7 +6123,7 @@ $('projInput').addEventListener('change',e=>{
   };
   r.readAsText(f); e.target.value='';
 });
-async function loadProject(d, dossier){
+async function loadProject(d, dossier, dossierId){
   layers.slice().forEach(l=>deleteLayer(l,true)); layers=[];
   flashes=[]; selFlash=-1;
   for(const k in (d.model||{})){ const e=$(k); if(e){ e.value=d.model[k]; e.__upd&&e.__upd(); } }
@@ -6000,7 +6156,7 @@ async function loadProject(d, dossier){
     lights=d.lights.map(makeLight); selLight=0; renderLightList(); loadLightEditor();
   }
   let pending=(d.flashes||[]).length;
-  if(!pending){ restoreLayers(d.layers||[], dossier); toast('Projet chargé'); return; }
+  if(!pending){ restoreLayers(d.layers||[], dossier, dossierId); toast('Projet chargé'); return; }
   (d.flashes||[]).forEach(fs=>{
     const im=new Image();
     im.onload=()=>{
@@ -6008,7 +6164,7 @@ async function loadProject(d, dossier){
       const f={id:fs.id, name:fs.name, src, info:fs.info||analyzeSource(src), cut:fs.cut, cutCanvas:null};
       cutout(f); f.thumb=f.cutCanvas.toDataURL('image/png'); flashes.push(f);
       if(--pending===0){ selFlash=0; renderGallery(); loadCutEditor(); drawCutPreview();
-        restoreLayers(d.layers||[], dossier); hist=[]; histAt=-1; pushHistory(); toast('Projet chargé'); }
+        restoreLayers(d.layers||[], dossier, dossierId); hist=[]; histAt=-1; pushHistory(); toast('Projet chargé'); }
     };
     im.src=fs.src;
   });

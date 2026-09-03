@@ -2141,11 +2141,24 @@ const tetonsCorps = {
  *  deux pectoraux de Homme — et une ancre restée dans le vide ne peignait
  *  qu'un côté. Le point visé est placé légèrement en avant du torse : la
  *  peau la plus proche est donc le sommet du pectoral ou du sein. */
+/** Repère codé en dur (yeux, tétons) remis dans l'orientation du corps.
+ *  Ces positions ont été relevées une fois sur les fichiers livrés, selon les
+ *  axes du monde. Redresser Homme de sa torsion d'origine (yawFix) fait
+ *  tourner le corps mais pas ces repères : les globes se retrouvaient glissés
+ *  vers l'arête du nez et les aréoles décalées d'autant. On leur applique donc
+ *  la même rotation, autour de l'axe vertical passant par l'origine — le corps
+ *  y est recentré en X et en Z, la rotation est donc la même pour tous. */
+function repereCorps(x, y, z){
+  const v=new THREE.Vector3(x,y,z);
+  const yf=(CORPS[corpsActif]||{}).yawFix;
+  if(yf) v.applyAxisAngle(new THREE.Vector3(0,1,0), THREE.MathUtils.degToRad(yf));
+  return v;
+}
 function majTetons(cle, H){
   const t=(CORPS[cle]||{}).tetons;
   if(!t || !H || !peauxSkinned.length){ tetonsCorps.uTetR.value=0; return; }
-  const cible=[new THREE.Vector3(-t.x*H, t.y*H, t.z*H),
-               new THREE.Vector3( t.x*H, t.y*H, t.z*H)];
+  const cible=[repereCorps(-t.x*H, t.y*H, t.z*H),
+               repereCorps( t.x*H, t.y*H, t.z*H)];
   const pris=[cible[0].clone(), cible[1].clone()], meil=[1e30,1e30];
   const v=new THREE.Vector3();
   peauxSkinned.forEach(sm=>{
@@ -3308,7 +3321,7 @@ function ajouterYeux(){
   if(forcee){
     const r=forcee.r*H;
     yeux=[forcee.g, forcee.d].map(o=>({r,
-      c:new THREE.Vector3(pBase.x+o[0]*H, pBase.y+o[1]*H, pBase.z+o[2]*H)}));
+      c:pBase.clone().add(repereCorps(o[0]*H, o[1]*H, o[2]*H))}));
   } else if(paire){
     // Le globe remplit l'orbite sans saillir. L'ouverture mesurée sert de
     // repère, mais elle est bornée : Female a des fentes de 4 mm et son

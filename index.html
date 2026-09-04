@@ -771,6 +771,17 @@ body.immersif #sortirImmersif{display:flex;align-items:center;justify-content:ce
       </div>
     </div>
 
+    <div class="grp contextuel" id="gVet" hidden>
+      <h3><span>Vêtements</span><span class="tagctx">Corps</span><span class="chev">▼</span></h3>
+      <div class="body">
+        <label class="chk"><input type="checkbox" id="vShort"> Short</label>
+        <label class="chk"><input type="checkbox" id="vPantalon"> Pantalon</label>
+        <label class="chk"><input type="checkbox" id="vTshirt"> T-shirt</label>
+        <label class="chk"><input type="checkbox" id="vPull"> Pull</label>
+        <div class="hint">Les zones couvertes sont grisées : on voit d'un coup d'œil ce qui dépasse.</div>
+      </div>
+    </div>
+
     <!-- La carnation vaut pour les cinq modèles : elle a son propre panneau,
          affiché en permanence, sous Animations sur un corps entier et sous
          Morphologie sur un membre isolé. -->
@@ -2193,6 +2204,85 @@ function majTetons(cle, H){
   tetonsCorps.uTetD.value.set( ex, ey, ez).applyAxisAngle(axeY, -yf);
   tetonsCorps.uTetR.value = t.r*H;
 }
+/* Vêtements : on ne modélise pas de tissu, on masque la peau qu'il couvrirait.
+   Chaque sommet du corps porte, dans un attribut, la liste des vêtements qui
+   le recouvrent — court short, pantalon, t-shirt, pull. Le calcul se fait une
+   fois au chargement, sur le squelette : on cherche l'os le plus proche et la
+   fraction parcourue le long de cet os, si bien que les limites tombent au bon
+   endroit sur les trois morphologies sans réglage. */
+const vetementsCorps = { uVet:{ value:new THREE.Vector4(0,0,0,0) } };
+const VETEMENTS = ['short','pantalon','tshirt','pull'];
+/** Quels vêtements couvriraient ce point ? -> [short, pantalon, t-shirt, pull] */
+function couvertureVetement(p, J, segs){
+  let best=null;
+  for(const [id,a,b] of segs){
+    const A=J[a], B=J[b]; if(!A||!B) continue;
+    const abx=B.x-A.x, aby=B.y-A.y, abz=B.z-A.z;
+    const L2=abx*abx+aby*aby+abz*abz; if(L2<1e-9) continue;
+    let t=((p.x-A.x)*abx+(p.y-A.y)*aby+(p.z-A.z)*abz)/L2;
+    t = t<0?0 : t>1?1 : t;
+    const dx=p.x-(A.x+abx*t), dy=p.y-(A.y+aby*t), dz=p.z-(A.z+abz*t);
+    const d=dx*dx+dy*dy+dz*dz;
+    if(!best || d<best.d) best={id, t, d};
+  }
+  if(!best) return [0,0,0,0];
+  const {id,t}=best;
+  const cuisse = /^jambe._h$/.test(id), mollet = /^jambe._b$/.test(id);
+  const bras   = /^bras._h$/.test(id),  avant  = /^bras._b$/.test(id);
+  const tronc  = id==='tronc';
+  // le bassin est le bas du tronc : c'est lui que prennent short et pantalon
+  const bassin = tronc && t<=0.20;
+  /* Encolure : la frontière entre le tronc et la tête serpente autour des
+     clavicules, et s'y fier donnait un col en dents de scie, avec des îlots de
+     peau sur le haut de la poitrine. On tranche donc à l'horizontale, à la
+     hauteur de l'articulation du cou — un col net, et le haut du buste repris
+     même là où c'est l'os de la tête qui est le plus proche. */
+  const souscou = !J.cou || p.y <= J.cou.y;
+  const buste  = souscou && (tronc ? t>=0.06 : id==='tete');
+  return [
+    (cuisse && t<=0.50) || bassin ? 1 : 0,            // short
+    cuisse || (mollet && t<=0.92) || bassin ? 1 : 0,  // pantalon
+    buste || (bras && t<=0.45) ? 1 : 0,               // t-shirt
+    buste || bras || (avant && t<=0.85) ? 1 : 0       // pull
+  ];
+}
+/** Attribut de couverture pour une géométrie dont les positions sont déjà
+ *  en repère monde (les décalcomanies le sont au moment où on les pose). */
+function attribuerVetement(geo, M){
+  const pos=geo.attributes.position; if(!pos) return;
+  const J=jointsModele();
+  const segs=SEGMENTS.filter(x=>J[x[1]]&&J[x[2]]);
+  if(!segs.length){ geo.setAttribute('vetement', new THREE.BufferAttribute(new Float32Array(pos.count*4),4)); return; }
+  const out=new Float32Array(pos.count*4);
+  const v=new THREE.Vector3();
+  for(let i=0;i<pos.count;i++){
+    v.fromBufferAttribute(pos,i); if(M) v.applyMatrix4(M);
+    const c=couvertureVetement(v, J, segs);
+    out[i*4]=c[0]; out[i*4+1]=c[1]; out[i*4+2]=c[2]; out[i*4+3]=c[3];
+  }
+  geo.setAttribute('vetement', new THREE.BufferAttribute(out,4));
+}
+/** Sans attribut, une géométrie recevrait des valeurs indéfinies : on comble. */
+function vetementNeutre(geo){
+  const pos=geo.attributes.position;
+  if(pos && !geo.attributes.vetement)
+    geo.setAttribute('vetement', new THREE.BufferAttribute(new Float32Array(pos.count*4),4));
+}
+function majVetements(){
+  const v=vetementsCorps.uVet.value;
+  v.set($('vShort')?.checked?1:0, $('vPantalon')?.checked?1:0,
+        $('vTshirt')?.checked?1:0, $('vPull')?.checked?1:0);
+  markDirty();
+}
+/* Le fragment couvert prend la teinte du tissu, et perd au passage aréoles et
+   diffusion sous-cutanée — on regarde du vêtement, plus de la peau. */
+const GLSL_VET_DECL = `
+        attribute vec4 vetement;
+        varying vec4 vVet;`;
+const GLSL_VET_FRAG = `
+        uniform vec4 uVet;
+        varying vec4 vVet;`;
+
 let _matCorps=null;
 function matPeauCorps(){
   if(_matCorps) return _matCorps;
@@ -2203,21 +2293,23 @@ function matPeauCorps(){
     clearcoat:0.0, clearcoatRoughness:0.6, side:THREE.FrontSide
   });
   _matCorps.onBeforeCompile = (sh)=>{
-    Object.assign(sh.uniforms, sssCorps, tetonsCorps);
+    Object.assign(sh.uniforms, sssCorps, tetonsCorps, vetementsCorps);
     // Position de repos (avant skinning), ramenée dans le repère du corps :
     // la matrice du maillage ne bouge pas pendant les animations, seuls les
     // os bougent — le repère est donc stable, et commun aux quatre morceaux
     // de Femme qui partagent ce matériau.
     sh.vertexShader = sh.vertexShader
-      .replace('void main() {', 'varying vec3 vRepos;\nvoid main() {')
+      .replace('void main() {', 'varying vec3 vRepos;'+GLSL_VET_DECL+'\nvoid main() {')
       .replace('#include <begin_vertex>',
-               '#include <begin_vertex>\n  vRepos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+               '#include <begin_vertex>\n  vRepos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n  vVet = vetement;');
     sh.fragmentShader = sh.fragmentShader
       .replace('void main() {', `
         uniform float uSSSAmount; uniform float uSSSPower;
         uniform vec3 uSSSColor; uniform vec3 uSSSDir;
         uniform vec3 uTetG; uniform vec3 uTetD; uniform float uTetR;
         varying vec3 vRepos;
+        uniform vec4 uVet;
+        varying vec4 vVet;
         void main() {`)
       .replace('#include <color_fragment>', `
         #include <color_fragment>
@@ -2233,13 +2325,15 @@ function matPeauCorps(){
           vec3 teinte = mix(vec3(1.0), vec3(0.80, 0.60, 0.56), aro*0.80);
           teinte = mix(teinte, vec3(0.66, 0.44, 0.42), pt*0.55);
           diffuseColor.rgb *= teinte;
-        }`)
+        }
+        // Vêtement : la peau couverte devient tissu, aréoles comprises.
+        if(dot(vVet, uVet) > 0.5) diffuseColor.rgb = vec3(0.185, 0.195, 0.215);`)
       // Relief : sans lui l'aréole n'est qu'une tache plate. On dérive la
       // normale du même champ de distance — aréole légèrement bombée, téton
       // saillant — comme le ferait une carte de relief, mais sans texture.
       .replace('#include <normal_fragment_maps>', `
         #include <normal_fragment_maps>
-        if(uTetR > 0.0){
+        if(uTetR > 0.0 && dot(vVet, uVet) <= 0.5){
           const vec3 kZ2 = vec3(1.0, 1.0, 0.40);
           float dd = min(length((vRepos - uTetG) * kZ2), length((vRepos - uTetD) * kZ2));
           float hA = 1.0 - smoothstep(uTetR*0.30, uTetR*0.98, dd);
@@ -2262,7 +2356,7 @@ function matPeauCorps(){
           float back  = pow(clamp(dot(Vv, -Lv), 0.0, 1.0), uSSSPower);
           float wrapD = clamp((dot(Nn, Lv) + 0.42) / 1.42, 0.0, 1.0) - clamp(dot(Nn, Lv), 0.0, 1.0);
           float amt   = uSSSAmount * (back * 0.85 + wrapD * 0.75);
-          gl_FragColor.rgb += uSSSColor * diffuseColor.rgb * amt;
+          if(dot(vVet, uVet) <= 0.5) gl_FragColor.rgb += uSSSColor * diffuseColor.rgb * amt;
         }`);
   };
   _matCorps.customProgramCacheKey = ()=>'skin-sss-corps';
@@ -4041,6 +4135,19 @@ function refreshLayerMaterial(l){
     l.mat=new THREE.MeshPhysicalMaterial({transparent:true, depthTest:true, depthWrite:false,
       polygonOffset:true, polygonOffsetFactor:-6, polygonOffsetUnits:-6,
       metalness:0, side:THREE.FrontSide});
+    /* Sous un vêtement, le motif disparaît purement et simplement : griser la
+       peau sans rien faire du tatouage aurait laissé le dessin flotter sur le
+       tissu. */
+    l.mat.onBeforeCompile = (sh)=>{
+      Object.assign(sh.uniforms, vetementsCorps);
+      sh.vertexShader = sh.vertexShader
+        .replace('void main() {', GLSL_VET_DECL+'\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vVet = vetement;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', GLSL_VET_FRAG+'\nvoid main() {')
+        .replace('#include <clipping_planes_fragment>',
+                 '#include <clipping_planes_fragment>\n  if(dot(vVet, uVet) > 0.5) discard;');
+    };
   }
   l.mat.map=l.tex;
   l.mat.normalMap=getInkNormal();
@@ -4654,6 +4761,9 @@ function rebuildDecal(l){
     const g=construire(bm, filet);
     if(!g) return;
     if(!g.attributes.position || g.attributes.position.count<3){ g.dispose(); return; }
+    // Encore en repère monde ici : c'est le moment de relever ce que le motif
+    // aurait sous un vêtement.
+    try{ attribuerVetement(g, null); }catch(e){ vetementNeutre(g); }
     // Sur un corps animé, la décalcomanie doit être skinnée comme la peau,
     // sinon elle reste figée pendant que le corps bouge.
     const sm = bm.userData.source;
@@ -5673,6 +5783,7 @@ function syncModelRows(){
   const corps = modelKind==='corps3d';
   if($('gModel')) $('gModel').hidden = corps;
   if($('gAnim'))  $('gAnim').hidden  = !corps;
+  if($('gVet'))   $('gVet').hidden   = !corps;
   majNomModele();
   $('rowPose').style.display = (isArm && !real) ? '' : 'none';
   $('rowSide').style.display = (modelKind==='bras'||modelKind==='jambe'||modelKind==='arm') ? '' : 'none';
@@ -6586,6 +6697,10 @@ async function _chargerCorpsInterne(cle){
   root.add(racine);
   majTetons(cle, H);
 
+  // Couverture des vêtements, relevée une fois sur la pose de repos. À faire
+  // avant les proxys : ils clonent la géométrie et doivent porter l'attribut.
+  try{ peauxSkinned.forEach(sm=>attribuerVetement(sm.geometry, sm.matrixWorld)); }
+  catch(e){ peauxSkinned.forEach(sm=>vetementNeutre(sm.geometry)); }
   // proxys de pose de repos : ce sont eux que l'on interroge et décalque
   peauxSkinned.forEach(sm=>{
     sm.updateMatrixWorld(true);
@@ -6788,6 +6903,9 @@ function jouerAnim(nom){
      gêne moins que ce recul à chaque fois. */
 }
 $$('#animBar button').forEach(b=>b.addEventListener('click',()=>jouerAnim(b.dataset.a)));
+['vShort','vPantalon','vTshirt','vPull'].forEach(id=>{
+  const e=$(id); if(e) e.addEventListener('change', majVetements);
+});
 let dernierCorps3D='male';
 $$('#corpsSubTabs button[data-c]').forEach(b=>b.addEventListener('click',()=>{
   $$('#corpsSubTabs button').forEach(x=>x.classList.remove('on'));

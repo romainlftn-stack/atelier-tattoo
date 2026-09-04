@@ -348,9 +348,11 @@ body.glisse-calque .layer{pointer-events:none}
   #mobModelBar{grid-column:1;grid-row:2;display:flex;align-items:center;gap:8px;
                min-width:0;
                padding:5px 8px;background:var(--panel);border-bottom:1px solid var(--line)}
-  /* Bras/Jambe/Corps et Homme/Femme/Super tiennent rarement sur une ligne :
-     ils passent à la ligne plutôt que de glisser sous le bouton Projet. */
-  #mobModelSlot{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;gap:6px}
+  /* Bras/Jambe/Corps et Homme/Femme/Super restent côte à côte : la ligne
+     défile latéralement plutôt que de se replier sur deux étages. */
+  #mobModelSlot{flex:1 1 auto;min-width:0;display:flex;flex-wrap:nowrap;gap:6px;
+                overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  #mobModelSlot::-webkit-scrollbar{display:none}
   #mobModelSlot .seg{flex:none}
   #mobMenuBtn{align-self:center}
   /* Le bandeau garde toute la largeur : rien ne flotte plus au-dessus. */
@@ -384,8 +386,10 @@ body.glisse-calque .layer{pointer-events:none}
   #mobMenuBtn .fl{color:var(--acc);font-size:10px}
   body.mob-menu-open #mobMenuBtn{background:var(--acc);border-color:var(--acc);color:#fff}
   body.mob-menu-open #mobMenuBtn .fl{color:#fff}
+  /* Le panneau Projet se pose tout en haut de l'écran plutôt que sous les
+     deux bandeaux : il y gagne la hauteur qu'il occupait à ne rien montrer. */
   #mobMenu{display:flex;flex-direction:column;gap:10px;position:fixed;left:8px;right:8px;
-    top:calc(var(--hdr) + 48px);z-index:65;background:var(--panel2);
+    top:calc(env(safe-area-inset-top) + 6px);z-index:66;background:var(--panel2);
     border:1px solid var(--line);border-radius:12px;padding:12px;
     box-shadow:0 14px 40px rgba(0,0,0,.5);
     transform:translateY(-14px) scale(.98);opacity:0;pointer-events:none;
@@ -428,14 +432,16 @@ body.glisse-calque .layer{pointer-events:none}
     padding:0 10px calc(7px + env(safe-area-inset-bottom));gap:8px
   }
   body #modeTabs.mob-bar button{flex:1;justify-content:center;padding:6px 0;font-size:12px;
-    background:var(--glass);border:1px solid var(--line);border-radius:16px;
+    background:var(--glass);border:1px solid var(--line);border-radius:10px;
     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
   body #modeTabs.mob-bar button.on{background:var(--acc);border-color:var(--acc);color:#fff}
 
   /* Pastilles d'état : posées juste au-dessus de Naviguer/Placer, et
      remontées au-dessus des animations quand elles sont là. */
-  #hud{bottom:calc(46px + env(safe-area-inset-bottom));max-width:52vw}
-  body.a-anim #hud{bottom:calc(88px + env(safe-area-inset-bottom))}
+  /* Les pastilles d'état passent en haut à gauche : en bas elles se
+     disputaient la place avec les animations et Naviguer/Placer. */
+  #hud{top:8px;bottom:auto;left:10px;max-width:52vw}
+  body.a-anim #hud{bottom:auto}
   #hudTip{display:none} /* instructions souris, sans objet au toucher */
   #hudFps{display:none}
   #viewbtns{top:8px;right:8px}
@@ -453,6 +459,21 @@ body.glisse-calque .layer{pointer-events:none}
   #animBar::-webkit-scrollbar{display:none}
   #animBar button{padding:7px 13px;font-size:12px;background:var(--elev1);
     border:1px solid var(--line);border-radius:16px}
+}
+/* Sur mobile le bandeau haut défile latéralement, donc rogne ce qui en
+   déborde : les deux menus déroulants qui en descendent étaient purement
+   invisibles — cliquer sur son prénom ne donnait plus accès à la déconnexion.
+   Ils sortent du flux et se posent sous le bandeau, en haut de l'écran.
+   Ces règles viennent après celles du bandeau pour l'emporter sur elles. */
+@media(max-width:860px){
+  #menuCompte{position:fixed;top:calc(var(--hdr) + 6px);right:8px;left:auto;z-index:70}
+  /* Boutons d'animation : un simple texte, sans pastille. La sélection se lit
+     à la graisse et au blanc, pas à un aplat de couleur. */
+  #animBar button{background:none!important;border:0!important;border-radius:0!important;
+    color:var(--txt3);font-weight:500;padding:7px 11px!important}
+  #animBar button:hover{background:none!important;color:var(--txt2)}
+  #animBar button.on{background:none!important;border:0!important;
+    color:#fff;font-weight:700}
 }
 #btnFull.on{background:var(--acc);border-color:var(--acc);color:#fff}
 /* Mode immersif : le repli du plein écran là où l'API n'existe pas. */
@@ -3552,13 +3573,28 @@ function fitView(anim=true){
 }
 /** Part de la hauteur de la scène masquée par les barres du bas (mobile). */
 function margeBasse(){
-  const cv=renderer.domElement;
-  const H=cv.clientHeight||1;
+  /* On mesure le recouvrement réel du bas de la scène, rectangle contre
+     rectangle. Les tests précédents passaient par offsetParent, qui vaut null
+     sur un élément en position fixe — or Naviguer/Placer l'est justement sur
+     mobile. La marge était donc toujours comptée nulle, et le modèle cadré
+     sur toute la hauteur finissait à moitié caché derrière les barres. */
+  const r=renderer.domElement.getBoundingClientRect();
+  const H=r.height||1;
   let px=0;
-  const mt=$('modeTabs');
-  if(mt && mt.classList.contains('mob-bar') && mt.offsetParent) px=Math.max(px, mt.offsetHeight);
-  const ab=$('animBar');
-  if(ab && ab.offsetParent && getComputedStyle(ab).position==='fixed') px=Math.max(px, ab.offsetHeight);
+  const couvre=(el)=>{
+    if(!el || !el.getClientRects().length) return;
+    const st=getComputedStyle(el);
+    if(st.display==='none' || st.visibility==='hidden' || parseFloat(st.opacity)===0) return;
+    const b=el.getBoundingClientRect();
+    // seulement ce qui mord sur la moitié basse de la scène...
+    if(b.bottom <= r.top + H*0.5 || b.top >= r.bottom) return;
+    // ...et qui la recouvre vraiment : sur grand écran la barre d'animations
+    // vit dans le panneau de droite, à côté de la scène et non dessus.
+    const large=Math.min(r.right,b.right)-Math.max(r.left,b.left);
+    if(large < r.width*0.5) return;
+    px=Math.max(px, r.bottom - b.top);
+  };
+  couvre($('modeTabs')); couvre($('animBar'));
   return clamp(px/H, 0, 0.45);
 }
 function setView(v){
@@ -6175,7 +6211,9 @@ $('btnRedo').addEventListener('click',redo);
   $('mobLayersBtn').addEventListener('click',()=>{
     document.body.classList.remove('mob-menu-open','mob-right-open');
     document.body.classList.add('mob-left-open');
-    $('gLayers').scrollIntoView({block:'start'});
+    // Le panneau garde sinon la position où on l'avait laissé et s'ouvre au
+    // milieu de son contenu : on repart de son haut.
+    $('sideL').scrollTop=0;
   });
   $('mobSettingsBtn').addEventListener('click',()=>{
     document.body.classList.remove('mob-menu-open','mob-left-open');
@@ -7210,6 +7248,11 @@ ldProgress(.6,'Construction de l’anatomie…');
   renderLayers(); loadLayerEditor(); drawCutPreview();
   resize();
   tick();
+  /* Le premier cadrage tombe avant que les barres du bas aient leur hauteur
+     définitive : la marge qu'elles réservent est alors comptée à zéro et le
+     modèle se retrouve centré sur toute la scène, donc trop bas, à moitié
+     masqué. On refait le point une fois la mise en page posée. */
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ resize(); fitView(); }));
   ldProgress(1,'Prêt');
   window.__booted=true;
   // accès console pour réglages avancés / débogage

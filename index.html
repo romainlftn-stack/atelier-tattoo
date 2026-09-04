@@ -2168,8 +2168,22 @@ function majTetons(cle, H){
       }
     }
   });
-  tetonsCorps.uTetG.value.copy(pris[0]);
-  tetonsCorps.uTetD.value.copy(pris[1]);
+  /* Les deux points sont accrochés chacun de leur côté au sommet de peau le
+     plus proche : rien ne garantit qu'ils tombent en vis-à-vis, et sur Homme
+     ils arrivaient décalés de 9 mm en hauteur et de 6 mm en écartement — l'oeil
+     le voit tout de suite. On les rend donc symétriques. La mise en miroir se
+     fait dans le repère redressé : le corps de Homme porte une torsion de
+     11,5°, ses deux pectoraux ne sont pas à la même profondeur, et un miroir
+     pris dans le repère du monde aurait décollé l'un des deux de la peau.
+     Une fois redressés, les deux points ne diffèrent plus que de 4,5 mm en
+     profondeur au lieu de 23. */
+  const yf=((CORPS[cle]||{}).yawFix||0)*Math.PI/180;
+  const axeY=new THREE.Vector3(0,1,0);
+  const gr=pris[0].clone().applyAxisAngle(axeY, yf);
+  const dr=pris[1].clone().applyAxisAngle(axeY, yf);
+  const ex=(Math.abs(gr.x)+Math.abs(dr.x))/2, ey=(gr.y+dr.y)/2, ez=(gr.z+dr.z)/2;
+  tetonsCorps.uTetG.value.set(-ex, ey, ez).applyAxisAngle(axeY, -yf);
+  tetonsCorps.uTetD.value.set( ex, ey, ez).applyAxisAngle(axeY, -yf);
   tetonsCorps.uTetR.value = t.r*H;
 }
 let _matCorps=null;
@@ -6395,7 +6409,7 @@ const CORPS = {
   male: { nom:'Homme', fichier:'corps/male_anime.glb?v='+ASSET_V,
           tex:{ map:'corps/tex/male_d.jpg?v='+ASSET_V },
           yeux:{ r:0.00742, g:[-0.01371,0.06084,0.05782], d:[0.02444,0.06084,0.04983] },
-          tetons:{ x:0.0421, y:0.7337, z:0.0400, r:0.0124 },
+          tetons:{ x:0.0421, y:0.7440, z:0.0400, r:0.0124 },
           /* Le fichier source porte une légère torsion de la pose de repos —
              mesurée sur les articulations, pas sur la caméra : hanches,
              genoux, chevilles, coudes, mains tournent tous d'environ 11,5°
@@ -6416,7 +6430,7 @@ const CORPS = {
              fausse. Position relevée une fois sur le modèle, exprimée en
              fractions de la stature et rapportée à l'os de la tête, donc
              indépendante du réglage de taille. */
-          yeux:{ r:0.0135, g:[-0.0200,0.0494,0.0731], d:[0.0200,0.0494,0.0731] },
+          yeux:{ r:0.0135, g:[-0.0208,0.0494,0.0731], d:[0.0192,0.0494,0.0709] },
           tetons:{ x:0.0720, y:0.6980, z:0.1650, r:0.0210 } },
   // Female arrive en quatre maillages (tête, tronc, bras, jambes) portant
   // chacun sa propre texture : on les reconnaît à leur nombre de sommets.

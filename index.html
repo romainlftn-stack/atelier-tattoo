@@ -486,10 +486,14 @@ body.glisse-calque .layer{pointer-events:none}
   /* Sur mobile, le libellé des corps cède la place à un symbole : la ligne
      Bras/Jambe/Corps + Homme/Femme/Super tient alors sans défiler. */
   #corpsSubTabs .lb{display:none}
-  #corpsSubTabs .sy{display:inline-flex;align-items:center;justify-content:center;
-    min-width:17px;font-size:15px;line-height:1}
-  #corpsSubTabs .sy-ic{width:15px;height:15px;fill:none;stroke:currentColor;
-    stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+  /* Le bouton devient lui-même une boîte centrée : accroché à la ligne de base
+     du texte, le pictogramme pendait bas et de travers dans sa pastille. */
+  #corpsSubTabs button{display:flex;align-items:center;justify-content:center;
+    padding:5px 9px;line-height:0}
+  #corpsSubTabs .sy{display:flex;align-items:center;justify-content:center;
+    width:17px;height:17px}
+  #corpsSubTabs .sy-ic{display:block;width:17px;height:17px;fill:none;
+    stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
   /* Boutons d'animation : un simple texte, sans pastille. La sélection se lit
      à la graisse et au blanc, pas à un aplat de couleur. */
   #animBar button{background:none!important;border:0!important;border-radius:0!important;
@@ -584,8 +588,8 @@ body.immersif #sortirImmersif,body.plein-ecran #sortirImmersif{display:flex;alig
       <button id="tabGlb" style="display:none" title="Modèle importé">Importé</button>
     </div>
     <div class="seg" id="corpsSubTabs" style="display:none">
-      <button data-c="male" class="on" title="Homme"><span class="lb">Homme</span><span class="sy" aria-hidden="true">♂</span></button>
-      <button data-c="female" title="Femme"><span class="lb">Femme</span><span class="sy" aria-hidden="true">♀</span></button>
+      <button data-c="male" class="on" title="Homme"><span class="lb">Homme</span><span class="sy" aria-hidden="true"><svg viewBox="0 0 24 24" class="sy-ic"><circle cx="10" cy="14.5" r="5.5"/><path d="M13.9 10.6 19.5 5"/><path d="M14.6 5h4.9v4.9"/></svg></span></button>
+      <button data-c="female" title="Femme"><span class="lb">Femme</span><span class="sy" aria-hidden="true"><svg viewBox="0 0 24 24" class="sy-ic"><circle cx="12" cy="8.5" r="5.5"/><path d="M12 14v7M8.6 18h6.8"/></svg></span></button>
       <button data-c="super" title="Super"><span class="lb">Super</span><span class="sy" aria-hidden="true"><svg viewBox="0 0 24 24" class="sy-ic"><path d="M12 2.7 20 5.5v6c0 4.3-3.2 7.8-8 9.7-4.8-1.9-8-5.4-8-9.7v-6z"/><path d="M14.7 9.4c-.5-.7-1.5-1.1-2.6-1.1-1.4 0-2.5.7-2.5 1.8 0 2.3 5.1 1.3 5.1 3.8 0 1.2-1.2 2-2.7 2-1.2 0-2.2-.4-2.7-1.2"/></svg></span></button>
     </div>
     <div class="seg mob-bar" id="modeTabs">
@@ -2938,6 +2942,7 @@ function anatGeometry(key, W){
 let anatXform=new THREE.Matrix4(), anatXformInv=new THREE.Matrix4();
 // incrémenté à chaque reconstruction : sert de clé aux mesures mises en cache
 let versionModele=0;
+let _profMembres=null;   // profil de chair des membres, voir profilMembres()
 let bodyMeshes=[], modelKind='bras', modelBox=new THREE.Box3(), importedGLB=null, importedName='', importedBaseH=1;
 
 /* ---------- Flexion des doigts sur le maillage réel ----------
@@ -3093,7 +3098,7 @@ function addMesh(geo, name, kind){
   return m;
 }
 function clearModel(){
-  invalidateProxy();
+  invalidateProxy(); invalideProfilMembres();
   if(mixer){ mixer.stopAllAction(); mixer=null; }
   clipCourant=null; squelette=null; peauxSkinned=[]; bindProxies=[]; poseRepos=[]; corpsActif=null;
   const ab=document.getElementById('animBar'); if(ab) ab.style.display='none';
@@ -5821,7 +5826,100 @@ function repereAutour(axe, version){
    la correction n'en ont pas : ils continuent d'être lus dans l'ancien repère,
    pour que rien ne bouge sous les pieds de l'utilisateur, et sont convertis
    au chargement du projet, une fois posés sur le corps qui les a vus naître. */
-const REPERE_VERSION = 2;
+const REPERE_VERSION = 3;
+/* Profil de chair d'un membre : centre et rayon relevés de proche en proche
+   le long de l'os. Un ancrage disait jusqu'ici « à tant de centimètres de
+   l'os, en fraction de sa longueur » ; deux membres de même longueur d'os
+   mais d'épaisseur différente ne remettaient donc pas le motif au même
+   endroit, et la reconstruction repartait de la normale mémorisée, qui
+   n'est pas radiale sur un membre irrégulier. Avec le profil, on replace le
+   motif à son angle autour de la chair et à sa fraction de rayon.
+   Mesuré sur huit repères posés en couronne autour de l'avant-bras de Homme
+   puis regardés en vue Bras, l'écart étant relevé par rapport au plan de la
+   main — la seule référence que les deux modèles partagent vraiment :
+   position le long du membre exacte (0,45 des deux côtés, contre 0,42 à 0,45
+   avant), et écart d'angle ramené de 20° et plus à 8,6° au pire, 2,8° en
+   moyenne. */
+const PROFIL_N=9;
+function invalideProfilMembres(){ _profMembres=null; }
+function profilMembres(){
+  if(_profMembres) return _profMembres;
+  const J=jointsModele(), segs=[];
+  SEGMENTS.forEach(([id,a,b])=>{
+    if(!/^(bras|jambe)/.test(id)) return;
+    const A=J[a], B=J[b]; if(!A||!B) return;
+    const ab=new THREE.Vector3().subVectors(B,A), L=ab.length();
+    if(L<1e-4) return;
+    segs.push({id, A:A.clone(), ab, L, axe:ab.clone().multiplyScalar(1/L),
+               seaux:Array.from({length:PROFIL_N},()=>[])});
+  });
+  const out={};
+  if(segs.length){
+    const v=new THREE.Vector3(), d=new THREE.Vector3();
+    bodyMeshes.forEach(m=>{ m.updateMatrixWorld(true);
+      const pos=m.geometry.attributes.position, pas=pos.count>30000?3:1;
+      for(let i=0;i<pos.count;i+=pas){
+        v.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);
+        // Le segment le plus proche, et lui seul : c'est ce qui empêche la
+        // cuisse d'aller mesurer l'autre cuisse, ou le torse le bras.
+        let bs=null, bd=Infinity, bt=0;
+        for(let k=0;k<segs.length;k++){
+          const S=segs[k];
+          d.subVectors(v,S.A);
+          const t=clamp(d.dot(S.axe)/S.L, 0, 1);
+          const dx=d.x-S.axe.x*t*S.L, dy=d.y-S.axe.y*t*S.L, dz=d.z-S.axe.z*t*S.L;
+          const dd=dx*dx+dy*dy+dz*dz;
+          if(dd<bd){ bd=dd; bs=S; bt=t; }
+        }
+        if(!bs || bd > bs.L*bs.L*0.25) continue;      // trop loin : pas ce membre
+        bs.seaux[Math.round(bt*(PROFIL_N-1))].push(v.clone());
+      }
+    });
+    segs.forEach(S=>{
+      const centres=new Array(PROFIL_N).fill(null), rayons=new Array(PROFIL_N).fill(null);
+      for(let k=0;k<PROFIL_N;k++){
+        const base=S.A.clone().addScaledVector(S.ab, k/(PROFIL_N-1));
+        let g=S.seaux[k].map(q=>{ const dd=new THREE.Vector3().subVectors(q,base);
+                                  return dd.addScaledVector(S.axe, -dd.dot(S.axe)); });
+        if(g.length<10) continue;
+        const c=new THREE.Vector3(); let r=0;
+        for(let p=0;p<2;p++){
+          c.set(0,0,0); g.forEach(q=>c.add(q)); c.multiplyScalar(1/g.length);
+          r=0; g.forEach(q=>r+=q.distanceTo(c)); r/=g.length;
+          if(p===0){ const fl=g.filter(q=>q.distanceTo(c)<r*1.6); if(fl.length>=10) g=fl; }
+        }
+        if(!(r>1e-4)) continue;
+        centres[k]=base.add(c); rayons[k]=r;
+      }
+      const plein=centres.map(c=>!!c);
+      if(!plein.some(Boolean)) return;               // membre absent de cette vue
+      for(let k=0;k<PROFIL_N;k++){
+        if(plein[k]) continue;
+        let j=-1, dm=1e9;
+        for(let q=0;q<PROFIL_N;q++) if(plein[q] && Math.abs(q-k)<dm){ dm=Math.abs(q-k); j=q; }
+        const base=S.A.clone().addScaledVector(S.ab, k/(PROFIL_N-1));
+        const c=centres[j].clone();
+        c.addScaledVector(S.axe, new THREE.Vector3().subVectors(base,c).dot(S.axe));
+        centres[k]=c; rayons[k]=rayons[j];
+      }
+      out[S.id]={A:S.A, ab:S.ab, axe:S.axe, L:S.L, centres, rayons};
+    });
+  }
+  _profMembres=out;
+  return out;
+}
+/** Centre et rayon de la chair, au point voulu le long d'un membre. */
+function sectionMembre(seg, t){
+  const P=profilMembres()[seg]; if(!P) return null;
+  const x=clamp(t,0,1)*(PROFIL_N-1);
+  const i=Math.min(PROFIL_N-2, Math.floor(x)), fr=x-i;
+  const c=P.centres[i].clone().lerp(P.centres[i+1], fr);
+  const rho=P.rayons[i]+(P.rayons[i+1]-P.rayons[i])*fr;
+  // Le centre interpolé glisse un peu le long de l'axe : on le ramène au t visé.
+  const base=P.A.clone().addScaledVector(P.ab, clamp(t,0,1));
+  c.addScaledVector(P.axe, new THREE.Vector3().subVectors(base,c).dot(P.axe));
+  return {centre:c, rho};
+}
 /** Ancrage d'un point sur le squelette, dans le repère de l'os le plus
  *  proche et en fractions de sa longueur.
  *  L'ancien repérage cylindrique (position le long de l'os, angle autour,
@@ -5862,11 +5960,26 @@ function ancrerSurSquelette(pos, nrm){
   const d=new THREE.Vector3().subVectors(pos,best.A);
   const rad=new THREE.Vector3().subVectors(pos,best.proj);
   const n=nrm ? nrm.clone().normalize() : rad.clone().normalize();
-  return {seg:best.id, f:REPERE_VERSION,
+  const anc={seg:best.id, f:REPERE_VERSION,
           a:d.dot(axe)/L, b:d.dot(u)/L, c:d.dot(v)/L,
           na:n.dot(axe), nb:n.dot(u), nc:n.dot(v),
           // format cylindrique conservé : les projets déjà enregistrés le lisent
           t:best.t, ang:Math.atan2(rad.dot(v), rad.dot(u)), r:rad.length()/L};
+  /* Sur un membre, on retient en plus l'angle autour de la chair et la part
+     du rayon : c'est ce couple, et non un décalage en fraction d'os, qui se
+     reporte fidèlement d'une morphologie à l'autre. */
+  try{
+    const S=sectionMembre(best.id, best.t);
+    if(S && S.rho>1e-4){
+      const rc=new THREE.Vector3().subVectors(pos, S.centre);
+      rc.addScaledVector(axe, -rc.dot(axe));
+      if(rc.lengthSq()>1e-10){
+        anc.ra=Math.atan2(rc.dot(v), rc.dot(u));
+        anc.rr=rc.length()/S.rho;
+      }
+    }
+  }catch(e){}
+  return anc;
 }
 /** Reconstruit la position visée sur le modèle courant. */
 function pointDepuisAncre(anc){
@@ -5878,6 +5991,14 @@ function pointDepuisAncre(anc){
   const axe=ab.clone().normalize();
   const L=longueurSegment(anc.seg, A, B); if(L<1e-9) return null;
   const {u,v}=repereAutour(axe, anc.f||0);
+  if((anc.f||0)>=3 && anc.rr!=null && anc.ra!=null){
+    const S=sectionMembre(anc.seg, clamp(anc.a, 0, 1));
+    if(S && S.rho>1e-4){
+      const dir=u.clone().multiplyScalar(Math.cos(anc.ra)).addScaledVector(v, Math.sin(anc.ra));
+      return {cible:S.centre.clone().addScaledVector(dir, anc.rr*S.rho),
+              dir, axe:S.centre.clone(), rho:S.rho, longueur:L};
+    }
+  }
   if(anc.a!==undefined){
     const cible=A.clone().addScaledVector(axe,anc.a*L)
                          .addScaledVector(u,  anc.b*L)
@@ -5955,6 +6076,7 @@ function viewShows(region){
 /** Replace chaque calque à partir de sa position anatomique, puis le recolle
     exactement sur la surface courante (morphologie, pose, vue). */
 function resnapLayers(){
+  invalideProfilMembres();
   const OUT=0.30;
   const fam=familleModele();
   layers.forEach(l=>{
@@ -5976,11 +6098,21 @@ function resnapLayers(){
         // revient vers elle : le rayon touche ainsi la face extérieure, et
         // au bon endroit même quand le point est presque sur l'axe de l'os
         // — le sommet du crâne, par exemple.
-        const depart=p.cible.clone().addScaledVector(p.dir, p.longueur*0.8);
+        const porte = p.rho ? p.rho*3 : p.longueur*0.8;
+        const depart=(p.rho ? p.axe.clone() : p.cible.clone()).addScaledVector(p.dir, porte);
         ray.set(depart, p.dir.clone().negate());
         const h=ray.intersectObjects(bodyMeshes,false);
         let ok=null;
-        for(const x of h){ if(x.point.distanceTo(p.cible) < p.longueur*0.55){ ok=x; break; } }
+        if(p.rho){
+          /* Le rayon part de loin et peut traverser le torse avant d'atteindre
+             le bras qui pend contre lui : on retient le point le plus proche
+             de la peau attendue, pas le premier rencontré. */
+          const attendu=p.axe.clone().addScaledVector(p.dir, p.rho);
+          let mieux=p.rho*1.7;
+          for(const x of h){ const dd=x.point.distanceTo(attendu); if(dd<mieux){ mieux=dd; ok=x; } }
+        } else {
+          for(const x of h){ if(x.point.distanceTo(p.cible) < p.longueur*0.55){ ok=x; break; } }
+        }
         if(ok){
           l.pos.copy(ok.point); l.normal.copy(worldNormal(ok)); l.mesh=ok.object;
           l.offView=false; pose=true;
@@ -7485,7 +7617,10 @@ ldProgress(.6,'Construction de l’anatomie…');
   if(/[?&]demo/.test(location.search)) loadSample(true);
   setTimeout(()=>{ $('loader').classList.add('gone');
     setTimeout(()=>$('loader').remove(), 600);
-    toast('Glissez vos flashs dans le panneau de gauche pour commencer');
+    // Sur mobile il n'y a pas de panneau de gauche visible, et rien à y glisser :
+    // le conseil n'y voulait rien dire et mangeait le premier coup d'œil.
+    if(!matchMedia('(max-width:860px)').matches)
+      toast('Glissez vos flashs dans le panneau de gauche pour commencer');
   }, 350);
 })();
 </script>

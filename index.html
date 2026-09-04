@@ -17,7 +17,7 @@
   --elev1:#1d2028; --elev2:#262a34; --sunk:#0f1115; --well:#0e1014;
   --row:#12151a; --rowh:#1a1e25; --rowon:#241a1c; --edge:#39404e;
   --track:#2c313c; --knob:#e6e8ee; --icoh:#2c313c;
-  --chk1:#4c525e; --chk2:#424852; --scroll:#2f343f; --scrollh:#3d4453;
+  --chk1:#c8cdd6; --chk2:#d9dde4; --scroll:#2f343f; --scrollh:#3d4453;
   --glass:rgba(12,13,16,.82); --toast:rgba(18,20,25,.96); --veil:rgba(6,7,9,.78);
   --shadow:rgba(0,0,0,.5);
   --r:8px; --hdr:46px; --pw:300px;
@@ -1171,6 +1171,13 @@ function resize(){
   renderer.setPixelRatio(Math.min(devicePixelRatio*q, 2.6));
   renderer.setSize(w,h,false);
   camera.aspect = w/h; camera.updateProjectionMatrix();
+  /* Redimensionner invalide l'image : la boucle ne dessine qu'à la demande, et
+     rien ici ne la réclamait. Au chargement, la scène est mise en place quand
+     le panneau n'a pas encore sa taille définitive ; l'observateur de taille
+     rappelait bien cette fonction ensuite, mais aucune image n'était produite.
+     Le modèle n'apparaissait donc qu'au premier clic, qui, lui, réveille la
+     boucle. */
+  markDirty();
 }
 new ResizeObserver(resize).observe(stage);
 

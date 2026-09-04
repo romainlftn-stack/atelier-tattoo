@@ -6409,7 +6409,7 @@ const CORPS = {
   male: { nom:'Homme', fichier:'corps/male_anime.glb?v='+ASSET_V,
           tex:{ map:'corps/tex/male_d.jpg?v='+ASSET_V },
           yeux:{ r:0.00742, g:[-0.01371,0.06084,0.05782], d:[0.02444,0.06084,0.04983] },
-          tetons:{ x:0.0421, y:0.7440, z:0.0400, r:0.0124 },
+          tetons:{ x:0.0495, y:0.7440, z:0.0400, r:0.0124 },
           /* Le fichier source porte une légère torsion de la pose de repos —
              mesurée sur les articulations, pas sur la caméra : hanches,
              genoux, chevilles, coudes, mains tournent tous d'environ 11,5°
@@ -6431,14 +6431,14 @@ const CORPS = {
              fractions de la stature et rapportée à l'os de la tête, donc
              indépendante du réglage de taille. */
           yeux:{ r:0.0135, g:[-0.0208,0.0494,0.0731], d:[0.0192,0.0494,0.0709] },
-          tetons:{ x:0.0720, y:0.6980, z:0.1650, r:0.0210 } },
+          tetons:{ x:0.0815, y:0.6980, z:0.1650, r:0.0210 } },
   // Female arrive en quatre maillages (tête, tronc, bras, jambes) portant
   // chacun sa propre texture : on les reconnaît à leur nombre de sommets.
   female: { nom:'Femme', fichier:'corps/female_anime.glb?v='+ASSET_V,
           parSommets:{ 35511:'Head', 16653:'Body', 37479:'Arm', 20988:'Leg' },
           texParPartie:(n)=>({ map:'corps/tex/female_'+n+'_d.jpg?v='+ASSET_V }),
           yeux:{ r:0.0070, g:[-0.0165,0.0547,0.0545], d:[0.0165,0.0547,0.0545] },
-          tetons:{ x:0.0377, y:0.7372, z:0.0850, r:0.0118 } }
+          tetons:{ x:0.0440, y:0.7372, z:0.0850, r:0.0118 } }
 };
 
 let corpsActif=null, mixer=null, clipCourant=null, horlogeAnim=new THREE.Clock();
